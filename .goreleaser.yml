@@ -1,32 +1,30 @@
-before:
-  hooks:
-    - go test -covermode=atomic -race ./go/...
 builds:
 - env:
-    - CGO_ENABLED=0
+  - CGO_ENABLED=0
   goarch:
-    - amd64
+  - amd64
   goos:
-    - linux
-    - darwin
+  - linux
+  - darwin
   ldflags:
-    - -w -s
-    - -X main.AppVersion={{.Commit}}
+  - -s
+  - -w
+  - -X main.AppVersion={{.Tag}}
   main: ./go/cmd/gh-ost/main.go
 checksum:
   name_template: 'checksums.txt'
 changelog:
   sort: asc
 nfpms:
-  - vendor: GitHub
-    homepage: https://github.com/github/gh-ost
-    maintainer: GitHub Engineering <github@github.com>
-    description: A triggerless online schema migration solution for MySQL
-    license: MIT
-    bindir: /usr/bin
-    formats:
-      - deb
-      - rpm
+- vendor: GitHub
+  homepage: https://github.com/github/gh-ost
+  maintainer: GitHub Engineering <github@github.com>
+  description: A triggerless online schema migration solution for MySQL
+  license: MIT
+  bindir: /usr/bin
+  formats:
+  - deb
+  - rpm
 release:
   name_template: "GA release {{.Tag}}"
   github:
