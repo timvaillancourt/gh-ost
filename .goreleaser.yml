@@ -1,0 +1,32 @@
+builds:
+- env:
+  - CGO_ENABLED=0
+  goarch:
+  - amd64
+  goos:
+  - linux
+  - darwin
+  ldflags:
+  - -s
+  - -w
+  - -X main.AppVersion={{.Tag}}
+  main: ./go/cmd/gh-ost/main.go
+checksum:
+  name_template: 'checksums.txt'
+changelog:
+  sort: asc
+nfpms:
+- vendor: GitHub
+  homepage: https://github.com/github/gh-ost
+  maintainer: GitHub Engineering <github@github.com>
+  description: A triggerless online schema migration solution for MySQL
+  license: MIT
+  bindir: /usr/bin
+  formats:
+  - deb
+  - rpm
+release:
+  name_template: "GA release {{.Tag}}"
+  github:
+    owner: timvaillancourt
+    name: gh-ost
