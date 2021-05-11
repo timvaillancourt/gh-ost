@@ -1,14 +1,14 @@
 builds:
 - env:
   - CGO_ENABLED=0
+  - GO111MODULE=off
   goarch:
   - amd64
   goos:
   - linux
   - darwin
   ldflags:
-  - -s
-  - -w
+  - -s -w
   - -X main.AppVersion={{.Tag}}
   main: ./go/cmd/gh-ost/main.go
 checksum:
