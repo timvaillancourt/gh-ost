@@ -46,7 +46,7 @@ func acceptSignals(migrationContext *base.MigrationContext) {
 // main is the application's entry point. It will either spawn a CLI or HTTP interfaces.
 func main() {
 	httpConfig := base.HttpConfig{}
-	flag.StringVar(&httpConfig.ListenAddr, "http-addr", "", "http server listen address (default: http server disabled)")
+	flag.StringVar(&httpConfig.ListenAddr, "http-listen-addr", "", "http server listen address (default: http server disabled)")
 
 	migrationContext := base.NewMigrationContext()
 	flag.StringVar(&migrationContext.InspectorConnectionConfig.Key.Hostname, "host", "127.0.0.1", "MySQL hostname (preferably a replica, not the master)")
