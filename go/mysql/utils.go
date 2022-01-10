@@ -1,5 +1,5 @@
 /*
-   Copyright 2016 GitHub Inc.
+   Copyright 2022 GitHub Inc.
 	 See https://github.com/github/gh-ost/blob/master/LICENSE
 */
 
@@ -28,6 +28,13 @@ type ReplicationLagResult struct {
 	Key InstanceKey
 	Lag time.Duration
 	Err error
+}
+
+type Trigger struct {
+	Name      string
+	Event     string
+	Statement string
+	Timing    string
 }
 
 func NewNoReplicationLagResult() *ReplicationLagResult {
@@ -210,4 +217,25 @@ func GetTableColumns(db *gosql.DB, databaseName, tableName string) (*sql.ColumnL
 func Kill(db *gosql.DB, connectionID string) error {
 	_, err := db.Exec(`KILL QUERY %s`, connectionID)
 	return err
+}
+
+// GetTriggers reads trigger list from given table
+func GetTriggers(db *gosql.DB, databaseName, tableName string) (triggers []Trigger, err error) {
+	query := fmt.Sprintf(`select trigger_name as name, event_manipulation as event, action_statement as statement, action_timing as timing
+	from information_schema.triggers 
+	where trigger_schema = '%s' and event_object_table = '%s'`, databaseName, tableName)
+
+	err = sqlutils.QueryRowsMap(db, query, func(rowMap sqlutils.RowMap) error {
+		triggers = append(triggers, Trigger{
+			Name:      rowMap.GetString("name"),
+			Event:     rowMap.GetString("event"),
+			Statement: rowMap.GetString("statement"),
+			Timing:    rowMap.GetString("timing"),
+		})
+		return nil
+	})
+	if err != nil {
+		return nil, err
+	}
+	return triggers, nil
 }
