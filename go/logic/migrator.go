@@ -996,7 +996,7 @@ func (this *Migrator) printStatus(rule PrintStatusRule, writers ...io.Writer) {
 		return
 	}
 
-	currentBinlogCoordinates := *this.eventsStreamer.GetCurrentBinlogCoordinates()
+	currentBinlogCoordinates := this.eventsStreamer.GetCurrentBinlogCoordinates()
 
 	status := fmt.Sprintf("Copy: %d/%d %.1f%%; Applied: %d; Backlog: %d/%d; Time: %+v(total), %+v(copy); streamer: %+v; Lag: %.2fs, HeartbeatLag: %.2fs, State: %s; ETA: %s",
 		totalRowsCopied, rowsEstimate, progressPct,
@@ -1051,7 +1051,7 @@ func (this *Migrator) initiateStreaming() error {
 			if atomic.LoadInt64(&this.finishedMigrating) > 0 {
 				return
 			}
-			this.migrationContext.SetRecentBinlogCoordinates(*this.eventsStreamer.GetCurrentBinlogCoordinates())
+			this.migrationContext.SetRecentBinlogCoordinates(this.eventsStreamer.GetCurrentBinlogCoordinates())
 		}
 	}()
 	return nil

@@ -37,7 +37,7 @@ type EventsStreamer struct {
 	connectionConfig         *mysql.ConnectionConfig
 	db                       *gosql.DB
 	migrationContext         *base.MigrationContext
-	initialBinlogCoordinates *mysql.BinlogCoordinates
+	initialBinlogCoordinates mysql.BinlogCoordinates
 	listeners                [](*BinlogEventListener)
 	listenersMutex           *sync.Mutex
 	eventsChannel            chan *binlog.BinlogEntry
@@ -122,24 +122,28 @@ func (this *EventsStreamer) InitDBConnections() (err error) {
 }
 
 // initBinlogReader creates and connects the reader: we hook up to a MySQL server as a replica
-func (this *EventsStreamer) initBinlogReader(binlogCoordinates *mysql.BinlogCoordinates) error {
+func (this *EventsStreamer) initBinlogReader(binlogCoordinates mysql.BinlogCoordinates) error {
 	goMySQLReader, err := binlog.NewGoMySQLReader(this.migrationContext)
 	if err != nil {
 		return err
 	}
-	if err := goMySQLReader.ConnectBinlogStreamer(*binlogCoordinates); err != nil {
+	if err := goMySQLReader.ConnectBinlogStreamer(binlogCoordinates); err != nil {
 		return err
 	}
 	this.binlogReader = goMySQLReader
 	return nil
 }
 
-func (this *EventsStreamer) GetCurrentBinlogCoordinates() *mysql.BinlogCoordinates {
+func (this *EventsStreamer) GetCurrentBinlogCoordinates() mysql.BinlogCoordinates {
 	return this.binlogReader.GetCurrentBinlogCoordinates()
 }
 
-func (this *EventsStreamer) GetReconnectBinlogCoordinates() *mysql.BinlogCoordinates {
-	return &mysql.BinlogCoordinates{LogFile: this.GetCurrentBinlogCoordinates().LogFile, LogPos: 4}
+func (this *EventsStreamer) GetReconnectBinlogCoordinates() mysql.BinlogCoordinates {
+	switch currentBinlogCoordinates := this.GetCurrentBinlogCoordinates().(type) {
+	case *mysql.FileBinlogCoordinates:
+		return &mysql.FileBinlogCoordinates{LogFile: currentBinlogCoordinates.LogFile, LogPos: 4}
+	}
+	return nil
 }
 
 // readCurrentBinlogCoordinates reads master status from hooked server
@@ -147,7 +151,7 @@ func (this *EventsStreamer) readCurrentBinlogCoordinates() error {
 	query := `show /* gh-ost readCurrentBinlogCoordinates */ master status`
 	foundMasterStatus := false
 	err := sqlutils.QueryRowsMap(this.db, query, func(m sqlutils.RowMap) error {
-		this.initialBinlogCoordinates = &mysql.BinlogCoordinates{
+		this.initialBinlogCoordinates = &mysql.FileBinlogCoordinates{
 			LogFile: m.GetString("File"),
 			LogPos:  m.GetInt64("Position"),
 		}
@@ -161,7 +165,7 @@ func (this *EventsStreamer) readCurrentBinlogCoordinates() error {
 	if !foundMasterStatus {
 		return fmt.Errorf("Got no results from SHOW MASTER STATUS. Bailing out")
 	}
-	this.migrationContext.Log.Debugf("Streamer binlog coordinates: %+v", *this.initialBinlogCoordinates)
+	this.migrationContext.Log.Debugf("Streamer binlog coordinates: %+v", this.initialBinlogCoordinates)
 	return nil
 }
 
@@ -192,7 +196,7 @@ func (this *EventsStreamer) StreamEvents(canStopStreaming func() bool) error {
 			time.Sleep(ReconnectStreamerSleepSeconds * time.Second)
 
 			// See if there's retry overflow
-			if this.binlogReader.LastAppliedRowsEventHint.Equals(&lastAppliedRowsEventHint) {
+			if this.binlogReader.LastAppliedRowsEventHint.Equals(lastAppliedRowsEventHint) {
 				successiveFailures += 1
 			} else {
 				successiveFailures = 0

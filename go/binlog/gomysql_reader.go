@@ -32,7 +32,7 @@ func NewGoMySQLReader(migrationContext *base.MigrationContext) (binlogReader *Go
 	binlogReader = &GoMySQLReader{
 		migrationContext:        migrationContext,
 		connectionConfig:        migrationContext.InspectorConnectionConfig,
-		currentCoordinates:      mysql.BinlogCoordinates{},
+		currentCoordinates:      nil,
 		currentCoordinatesMutex: &sync.Mutex{},
 		binlogSyncer:            nil,
 		binlogStreamer:          nil,
@@ -63,22 +63,26 @@ func (this *GoMySQLReader) ConnectBinlogStreamer(coordinates mysql.BinlogCoordin
 
 	this.currentCoordinates = coordinates
 	this.migrationContext.Log.Infof("Connecting binlog streamer at %+v", this.currentCoordinates)
-	// Start sync with specified binlog file and position
-	this.binlogStreamer, err = this.binlogSyncer.StartSync(gomysql.Position{this.currentCoordinates.LogFile, uint32(this.currentCoordinates.LogPos)})
 
+	switch currentCoordinates := this.currentCoordinates.(type) {
+	case *mysql.FileBinlogCoordinates:
+		// Start sync with specified binlog file and position
+		this.binlogStreamer, err = this.binlogSyncer.StartSync(gomysql.Position{currentCoordinates.LogFile, uint32(currentCoordinates.LogPos)})
+	default:
+		err = mysql.ErrUnsupportedBinlogCoordinates
+	}
 	return err
 }
 
-func (this *GoMySQLReader) GetCurrentBinlogCoordinates() *mysql.BinlogCoordinates {
+func (this *GoMySQLReader) GetCurrentBinlogCoordinates() mysql.BinlogCoordinates {
 	this.currentCoordinatesMutex.Lock()
 	defer this.currentCoordinatesMutex.Unlock()
-	returnCoordinates := this.currentCoordinates
-	return &returnCoordinates
+	return this.currentCoordinates
 }
 
 // StreamEvents
 func (this *GoMySQLReader) handleRowsEvent(ev *replication.BinlogEvent, rowsEvent *replication.RowsEvent, entriesChannel chan<- *BinlogEntry) error {
-	if this.currentCoordinates.SmallerThanOrEquals(&this.LastAppliedRowsEventHint) {
+	if this.currentCoordinates.SmallerThanOrEquals(this.LastAppliedRowsEventHint) {
 		this.migrationContext.Log.Debugf("Skipping handled query at %+v", this.currentCoordinates)
 		return nil
 	}
@@ -137,21 +141,27 @@ func (this *GoMySQLReader) StreamEvents(canStopStreaming func() bool, entriesCha
 		if err != nil {
 			return err
 		}
-		func() {
-			this.currentCoordinatesMutex.Lock()
-			defer this.currentCoordinatesMutex.Unlock()
-			this.currentCoordinates.LogPos = int64(ev.Header.LogPos)
-		}()
-		if rotateEvent, ok := ev.Event.(*replication.RotateEvent); ok {
+
+		switch currentCoordinates := this.currentCoordinates.(type) {
+		case *mysql.FileBinlogCoordinates:
 			func() {
 				this.currentCoordinatesMutex.Lock()
 				defer this.currentCoordinatesMutex.Unlock()
-				this.currentCoordinates.LogFile = string(rotateEvent.NextLogName)
+				currentCoordinates.LogPos = int64(ev.Header.LogPos)
 			}()
-			this.migrationContext.Log.Infof("rotate to next log from %s:%d to %s", this.currentCoordinates.LogFile, int64(ev.Header.LogPos), rotateEvent.NextLogName)
-		} else if rowsEvent, ok := ev.Event.(*replication.RowsEvent); ok {
-			if err := this.handleRowsEvent(ev, rowsEvent, entriesChannel); err != nil {
-				return err
+
+			switch event := ev.Event.(type) {
+			case *replication.RotateEvent:
+				func() {
+					this.currentCoordinatesMutex.Lock()
+					defer this.currentCoordinatesMutex.Unlock()
+					currentCoordinates.LogFile = string(event.NextLogName)
+				}()
+				this.migrationContext.Log.Infof("rotate to next log from %s:%d to %s", currentCoordinates.LogFile, int64(ev.Header.LogPos), event.NextLogName)
+			case *replication.RowsEvent:
+				if err := this.handleRowsEvent(ev, event, entriesChannel); err != nil {
+					return err
+				}
 			}
 		}
 	}
