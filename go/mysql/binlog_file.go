@@ -17,8 +17,8 @@ type FileBinlogCoordinates struct {
 	LogPos  int64
 }
 
-// ParseInstanceKey will parse an InstanceKey from a string representation such as 127.0.0.1:3306
-func ParseBinlogCoordinates(logFileLogPos string) (BinlogCoordinates, error) {
+// ParseFileBinlogCoordinates parses a binlog file position into a FileBinlogCoordinates struct
+func ParseFileBinlogCoordinates(logFileLogPos string) (*FileBinlogCoordinates, error) {
 	tokens := strings.SplitN(logFileLogPos, ":", 2)
 	if len(tokens) != 2 {
 		return nil, fmt.Errorf("ParseBinlogCoordinates: Cannot parse BinlogCoordinates from %s. Expected format is file:pos", logFileLogPos)
