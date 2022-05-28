@@ -1185,7 +1185,6 @@ func (this *Migrator) iterateChunks() error {
 		// Enqueue copy operation; to be executed by executeWriteFuncs()
 		this.copyRowsQueue <- copyRowsFunc
 	}
-	return nil
 }
 
 func (this *Migrator) onApplyEventStruct(eventStruct *applyEventStruct) error {
@@ -1291,7 +1290,6 @@ func (this *Migrator) executeWriteFuncs() error {
 			}
 		}
 	}
-	return nil
 }
 
 // finalCleanup takes actions at very end of migration, dropping tables etc.
