@@ -25,8 +25,7 @@ func PrettifyDurationOutput(d time.Duration) string {
 	if d < time.Second {
 		return "0s"
 	}
-	result := fmt.Sprintf("%s", d)
-	result = prettifyDurationRegexp.ReplaceAllString(result, "")
+	result := prettifyDurationRegexp.ReplaceAllString(d.String(), "")
 	return result
 }
 
