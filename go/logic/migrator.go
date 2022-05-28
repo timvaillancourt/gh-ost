@@ -813,23 +813,23 @@ func (this *Migrator) initiateStatus() error {
 // migration, and as response to the "status" interactive command.
 func (this *Migrator) printMigrationStatusHint(writers ...io.Writer) {
 	w := io.MultiWriter(writers...)
-	fmt.Fprintf(w, "# Migrating %s.%s; Ghost table is %s.%s",
+	fmt.Fprintf(w, "# Migrating %s.%s; Ghost table is %s.%s\n",
 		sql.EscapeName(this.migrationContext.DatabaseName),
 		sql.EscapeName(this.migrationContext.OriginalTableName),
 		sql.EscapeName(this.migrationContext.DatabaseName),
 		sql.EscapeName(this.migrationContext.GetGhostTableName()),
 	)
-	fmt.Fprintf(w, "# Migrating %+v; inspecting %+v; executing on %+v",
+	fmt.Fprintf(w, "# Migrating %+v; inspecting %+v; executing on %+v\n",
 		*this.applier.connectionConfig.ImpliedKey,
 		*this.inspector.connectionConfig.ImpliedKey,
 		this.migrationContext.Hostname,
 	)
-	fmt.Fprintf(w, "# Migration started at %+v",
+	fmt.Fprintf(w, "# Migration started at %+v\n",
 		this.migrationContext.StartTime.Format(time.RubyDate),
 	)
 	maxLoad := this.migrationContext.GetMaxLoad()
 	criticalLoad := this.migrationContext.GetCriticalLoad()
-	fmt.Fprintf(w, "# chunk-size: %+v; max-lag-millis: %+vms; dml-batch-size: %+v; max-load: %s; critical-load: %s; nice-ratio: %f",
+	fmt.Fprintf(w, "# chunk-size: %+v; max-lag-millis: %+vms; dml-batch-size: %+v; max-load: %s; critical-load: %s; nice-ratio: %f\n",
 		atomic.LoadInt64(&this.migrationContext.ChunkSize),
 		atomic.LoadInt64(&this.migrationContext.MaxLagMillisecondsThrottleThreshold),
 		atomic.LoadInt64(&this.migrationContext.DMLBatchSize),
@@ -842,7 +842,7 @@ func (this *Migrator) printMigrationStatusHint(writers ...io.Writer) {
 		if base.FileExists(this.migrationContext.ThrottleFlagFile) {
 			setIndicator = "[set]"
 		}
-		fmt.Fprintf(w, "# throttle-flag-file: %+v %+v",
+		fmt.Fprintf(w, "# throttle-flag-file: %+v %+v\n",
 			this.migrationContext.ThrottleFlagFile, setIndicator,
 		)
 	}
@@ -851,17 +851,17 @@ func (this *Migrator) printMigrationStatusHint(writers ...io.Writer) {
 		if base.FileExists(this.migrationContext.ThrottleAdditionalFlagFile) {
 			setIndicator = "[set]"
 		}
-		fmt.Fprintf(w, "# throttle-additional-flag-file: %+v %+v",
+		fmt.Fprintf(w, "# throttle-additional-flag-file: %+v %+v\n",
 			this.migrationContext.ThrottleAdditionalFlagFile, setIndicator,
 		)
 	}
 	if throttleQuery := this.migrationContext.GetThrottleQuery(); throttleQuery != "" {
-		fmt.Fprintf(w, "# throttle-query: %+v",
+		fmt.Fprintf(w, "# throttle-query: %+v\n",
 			throttleQuery,
 		)
 	}
 	if throttleControlReplicaKeys := this.migrationContext.GetThrottleControlReplicaKeys(); throttleControlReplicaKeys.Len() > 0 {
-		fmt.Fprintf(w, "# throttle-control-replicas count: %+v",
+		fmt.Fprintf(w, "# throttle-control-replicas count: %+v\n",
 			throttleControlReplicaKeys.Len(),
 		)
 	}
@@ -871,20 +871,20 @@ func (this *Migrator) printMigrationStatusHint(writers ...io.Writer) {
 		if base.FileExists(this.migrationContext.PostponeCutOverFlagFile) {
 			setIndicator = "[set]"
 		}
-		fmt.Fprintf(w, "# postpone-cut-over-flag-file: %+v %+v",
+		fmt.Fprintf(w, "# postpone-cut-over-flag-file: %+v %+v\n",
 			this.migrationContext.PostponeCutOverFlagFile, setIndicator,
 		)
 	}
 	if this.migrationContext.PanicFlagFile != "" {
-		fmt.Fprintf(w, "# panic-flag-file: %+v",
+		fmt.Fprintf(w, "# panic-flag-file: %+v\n",
 			this.migrationContext.PanicFlagFile,
 		)
 	}
-	fmt.Fprintf(w, "# Serving on unix socket: %+v",
+	fmt.Fprintf(w, "# Serving on unix socket: %+v\n",
 		this.migrationContext.ServeSocketFile,
 	)
 	if this.migrationContext.ServeTCPPort != 0 {
-		fmt.Fprintf(w, "# Serving on TCP port: %+v", this.migrationContext.ServeTCPPort)
+		fmt.Fprintf(w, "# Serving on TCP port: %+v\n", this.migrationContext.ServeTCPPort)
 	}
 }
 
