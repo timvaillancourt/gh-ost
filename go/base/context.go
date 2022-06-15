@@ -143,6 +143,7 @@ type MigrationContext struct {
 	HooksStatusIntervalSec              int64
 
 	DropServeSocket bool
+	ServeSocketDir  string
 	ServeSocketFile string
 	ServeTCPPort    int64
 

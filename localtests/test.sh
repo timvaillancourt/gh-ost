@@ -243,7 +243,7 @@ build_binary() {
     return 0
   fi
 
-  go build -o $ghost_binary go/cmd/gh-ost/main.go
+  go build -o $ghost_binary ./go/cmd/gh-ost/...
 
   if [ $? -ne 0 ] ; then
     echo "Build failure"
