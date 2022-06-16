@@ -15,7 +15,7 @@ import (
 	"github.com/github/gh-ost/go/sql"
 )
 
-func buildGhostMigrateFlags(migrationContext *base.MigrationContext) []cli.Flag {
+func buildMigrateFlags(migrationContext *base.MigrationContext) []cli.Flag {
 	return []cli.Flag{
 		// required flags
 		&cli.StringFlag{
@@ -52,7 +52,7 @@ func buildGhostMigrateFlags(migrationContext *base.MigrationContext) []cli.Flag 
 		&cli.StringFlag{
 			Name:        "host",
 			Value:       "127.0.0.1",
-			Usage:       "MySQL hostname (preferably a replica, not the master)",
+			Usage:       "MySQL hostname (preferably a replica, not the primary)",
 			Destination: &migrationContext.InspectorConnectionConfig.Key.Hostname,
 		},
 		&cli.StringFlag{
@@ -64,7 +64,7 @@ func buildGhostMigrateFlags(migrationContext *base.MigrationContext) []cli.Flag 
 		&cli.IntFlag{
 			Name:        "port",
 			Value:       3306,
-			Usage:       "MySQL port (preferably a replica, not the master)",
+			Usage:       "MySQL port (preferably a replica, not the primary)",
 			Destination: &migrationContext.InspectorConnectionConfig.Key.Port,
 		},
 		&cli.Float64Flag{
@@ -242,8 +242,9 @@ func buildGhostMigrateFlags(migrationContext *base.MigrationContext) []cli.Flag 
 			Usage: "when given, gh-ost checks given URL via HEAD request; any response code other than 200 (OK) causes throttling; make sure it has low latency response",
 		},
 		&cli.BoolFlag{
-			Name:  "ignore-http-errors",
-			Usage: "ignore HTTP connection errors during throttle check",
+			Name:    "throttle-http-ignore-errors",
+			Aliases: []string{"ignore-http-errors"}, // TODO: deprecate
+			Usage:   "ignore HTTP connection errors during throttle check",
 		},
 		&cli.IntFlag{
 			Name:  "heartbeat-interval-millis",
@@ -266,7 +267,7 @@ func buildGhostMigrateFlags(migrationContext *base.MigrationContext) []cli.Flag 
 	}
 }
 
-func runGhostMigrate(c *cli.Context, migrationContext *base.MigrationContext) error {
+func runMigrate(c *cli.Context, migrationContext *base.MigrationContext) error {
 	migrationContext.Log.SetLevel(log.ERROR)
 	if c.IsSet("verbose") {
 		migrationContext.Log.SetLevel(log.INFO)
@@ -325,10 +326,10 @@ func runGhostMigrate(c *cli.Context, migrationContext *base.MigrationContext) er
 		migrationContext.Log.Warning("--test-on-replica-skip-replica-stop enabled. We will not stop replication before cut-over. Ensure you have a plugin that does this.")
 	}
 	if migrationContext.CliMasterUser != "" && migrationContext.AssumeMasterHostname == "" {
-		migrationContext.Log.Fatalf("--master-user requires --assume-primary-host")
+		migrationContext.Log.Fatalf("--primary-user requires --assume-primary-host")
 	}
 	if migrationContext.CliMasterPassword != "" && migrationContext.AssumeMasterHostname == "" {
-		migrationContext.Log.Fatalf("--master-password requires --assume-primary-host")
+		migrationContext.Log.Fatalf("--primary-password requires --assume-primary-host")
 	}
 	if migrationContext.TLSCACertificate != "" && !migrationContext.UseTLS {
 		migrationContext.Log.Fatalf("--ssl-ca requires --ssl")
@@ -413,14 +414,15 @@ func runGhostMigrate(c *cli.Context, migrationContext *base.MigrationContext) er
 	return nil
 }
 
-func buildGhostMigrateCommand() *cli.Command {
+func buildMigrateCommand() *cli.Command {
 	migrationContext := base.NewMigrationContext()
 	return &cli.Command{
-		Name:  "migrate",
-		Usage: "Run a migration",
-		Flags: buildGhostMigrateFlags(migrationContext),
+		Name:    "migrate",
+		Aliases: []string{"run"},
+		Usage:   "Run a migration",
+		Flags:   buildMigrateFlags(migrationContext),
 		Action: func(c *cli.Context) error {
-			return runGhostMigrate(c, migrationContext)
+			return runMigrate(c, migrationContext)
 		},
 	}
 }
