@@ -154,7 +154,6 @@ dml-batch-size=<newsize>             # Set a new dml-batch-size
 nice-ratio=<ratio>                   # Set a new nice-ratio, immediate sleep after each row-copy operation, float (examples: 0 is aggressive, 0.7 adds 70% runtime, 1.0 doubles runtime, 2.0 triples runtime, ...)
 critical-load=<load>                 # Set a new set of max-load thresholds
 max-lag-millis=<max-lag>             # Set a new replication lag threshold
-replication-lag-query=<query>        # Set a new query that determines replication lag (no quotes)
 max-load=<load>                      # Set a new set of max-load thresholds
 throttle-query=<query>               # Set a new throttle-query (no quotes)
 throttle-http=<URL>                  # Set a new throttle URL
@@ -233,10 +232,6 @@ help                                 # This message
 				this.migrationContext.SetMaxLagMillisecondsThrottleThreshold(int64(maxLagMillis))
 				return ForcePrintStatusAndHintRule, nil
 			}
-		}
-	case "replication-lag-query":
-		{
-			return NoPrintStatusRule, fmt.Errorf("replication-lag-query is deprecated. gh-ost uses an internal, subsecond resolution query")
 		}
 	case "nice-ratio":
 		{

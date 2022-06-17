@@ -41,7 +41,7 @@ func buildMigrateFlags(migrationContext *base.MigrationContext) []cli.Flag {
 		&cli.StringFlag{
 			Name:  "cut-over",
 			Value: "atomic",
-			Usage: "choose cut-over type (default|atomic, two-step)",
+			Usage: "Choose cut-over type (atomic or two-step)",
 		},
 		&cli.BoolFlag{
 			Name:  "execute",
@@ -154,6 +154,16 @@ func buildMigrateFlags(migrationContext *base.MigrationContext) []cli.Flag {
 			Destination: &migrationContext.AllowedMasterMaster,
 		},
 		&cli.BoolFlag{
+			Name:        "assume-rbr",
+			Usage:       "set to 'true' when you know for certain your server uses 'ROW' binlog_format. gh-ost is unable to tell, event after reading binlog_format, whether the replication process does indeed use 'ROW', and restarts replication to be certain RBR setting is applied. Such operation requires SUPER privileges which you might not have. Setting this flag avoids restarting replication and you can proceed to use gh-ost without SUPER privileges",
+			Destination: &migrationContext.AssumeRBR,
+		},
+		&cli.BoolFlag{
+			Name:        "azure",
+			Usage:       "set to 'true' when you execute on Azure Database on MySQL.",
+			Destination: &migrationContext.AzureMySQL,
+		},
+		&cli.BoolFlag{
 			Name:        "allow-nullable-unique-key",
 			Usage:       "allow gh-ost to migrate based on a unique key with nullable columns. As long as no NULL values exist, this should be OK. If NULL values exist in chosen key, data may be corrupted. Use at your own risk!",
 			Destination: &migrationContext.NullableUniqueKeyAllowed,
@@ -161,6 +171,11 @@ func buildMigrateFlags(migrationContext *base.MigrationContext) []cli.Flag {
 		&cli.BoolFlag{
 			Name:        "approve-renamed-columns",
 			Usage:       "in case your `ALTER` statement renames columns, gh-ost will note that and offer its interpretation of the rename. By default gh-ost does not proceed to execute. This flag approves that gh-ost's interpretation is correct",
+			Destination: &migrationContext.ApproveRenamedColumns,
+		},
+		&cli.BoolFlag{
+			Name:        "check-flag",
+			Usage:       "Check if another flag exists/supported. This allows for cross-version scripting. Exits with 0 when all additional provided flags exist, nonzero otherwise. You must provide (dummy) values for flags that require a value. Example: gh-ost --check-flag --cut-over-lock-timeout-seconds --nice-ratio 0",
 			Destination: &migrationContext.ApproveRenamedColumns,
 		},
 		&cli.BoolFlag{
@@ -199,6 +214,12 @@ func buildMigrateFlags(migrationContext *base.MigrationContext) []cli.Flag {
 			Usage:       "TBD",
 			Destination: &migrationContext.ServeSocketDir,
 		},
+		&cli.BoolFlag{
+			Name:        "cut-over-exponential-backoff",
+			Usage:       "Wait exponentially longer intervals between failed cut-over attempts. Wait intervals obey a maximum configurable with 'exponential-backoff-max-interval').",
+			Destination: &migrationContext.CutOverExponentialBackoff,
+		},
+		//
 		&cli.IntFlag{
 			Name:  "exponential-backoff-max-interval",
 			Value: 64,
@@ -223,6 +244,16 @@ func buildMigrateFlags(migrationContext *base.MigrationContext) []cli.Flag {
 			Name:  "cut-over-lock-timeout-seconds",
 			Value: 3,
 			Usage: "Max number of seconds to hold locks on tables while attempting to cut-over (retry attempted when lock exceeds timeout)",
+		},
+		&cli.Int64Flag{
+			Name:        "critical-load-hibernate-seconds",
+			Usage:       "When non-zero, critical-load does not panic and bail out; instead, gh-ost goes into hibernation for the specified duration. It will not read/write anything from/to any server",
+			Destination: &migrationContext.CriticalLoadHibernateSeconds,
+		},
+		&cli.Int64Flag{
+			Name:        "critical-load-interval-seconds",
+			Usage:       "When 0, migration immediately bails out upon meeting critical-load. When non-zero, a second check is done after given interval, and migration only bails out if 2nd check still meets critical load",
+			Destination: &migrationContext.CriticalLoadIntervalMilliseconds,
 		},
 		&cli.Float64Flag{
 			Name:  "nice-ratio",
@@ -422,6 +453,9 @@ func buildMigrateCommand() *cli.Command {
 		Usage:   "Run a gh-ost migration",
 		Flags:   buildMigrateFlags(migrationContext),
 		Action: func(c *cli.Context) error {
+			if c.IsSet("check-flag") {
+				return nil
+			}
 			return runMigrate(c, migrationContext)
 		},
 	}
