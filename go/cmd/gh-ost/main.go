@@ -18,6 +18,8 @@ import (
 	"github.com/urfave/cli/v2"
 )
 
+const AppName string = "gh-ost"
+
 var AppVersion string
 
 // acceptSignals registers for OS signals
@@ -48,15 +50,15 @@ func main() {
 	}
 
 	ghost := &cli.App{
-		Name:    "gh-ost",
+		Name:    AppName,
 		Version: AppVersion,
-		Usage: `GitHub's Online Schema Migrations for MySQL
+		Usage: `GitHub Online Schema-migration Tool for MySQL
 				https://github.com/github/gh-ost`,
 		Flags: []cli.Flag{
 			&cli.StringFlag{
 				Name:    "config",
 				Aliases: []string{"c", "conf"},
-				Usage:   "Config file",
+				Usage:   "Path to config file",
 			},
 			&cli.BoolFlag{Name: "quiet", Usage: "quiet"},
 			&cli.BoolFlag{Name: "verbose", Usage: "verbose"},

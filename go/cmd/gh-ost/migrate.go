@@ -419,7 +419,7 @@ func buildMigrateCommand() *cli.Command {
 	return &cli.Command{
 		Name:    "migrate",
 		Aliases: []string{"run"},
-		Usage:   "Run a migration",
+		Usage:   "Run a gh-ost migration",
 		Flags:   buildMigrateFlags(migrationContext),
 		Action: func(c *cli.Context) error {
 			return runMigrate(c, migrationContext)
