@@ -138,7 +138,8 @@ test_single() {
   echo_dot
   sleep 1
   #
-  cmd="$ghost_binary \
+  ghost_global_flags="--debug --stack --verbose"
+  cmd="$ghost_binary $ghost_global_flags migrate \
     --user=gh-ost \
     --password=gh-ost \
     --host=$replica_host \
@@ -158,9 +159,6 @@ test_single() {
     --test-on-replica \
     --default-retries=3 \
     --chunk-size=10 \
-    --verbose \
-    --debug \
-    --stack \
     --execute ${extra_args[@]}"
   echo_dot
   echo $cmd > $exec_command_file
