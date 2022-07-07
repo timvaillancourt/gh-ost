@@ -42,7 +42,7 @@ func acceptSignals(migrationContext *base.MigrationContext) {
 	}()
 }
 
-// main is the application's entry point. It will either spawn a CLI or HTTP interfaces.
+// main is the application's entry point
 func main() {
 	cli.VersionFlag = &cli.BoolFlag{Name: "version", Aliases: []string{"V"}}
 	cli.VersionPrinter = func(c *cli.Context) {
