@@ -1,0 +1,13 @@
+run:
+  timeout: 5m
+  modules-download-mode: readonly
+
+linters:
+  disable:
+    - errcheck
+  enable:
+    - noctx
+    - rowserrcheck
+    - sqlclosecheck
+    - unused
+    

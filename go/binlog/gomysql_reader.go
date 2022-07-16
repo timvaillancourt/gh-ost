@@ -1,5 +1,5 @@
 /*
-   Copyright 2021 GitHub Inc.
+   Copyright 2022 GitHub Inc.
 	 See https://github.com/github/gh-ost/blob/master/LICENSE
 */
 
@@ -28,31 +28,24 @@ type GoMySQLReader struct {
 	LastAppliedRowsEventHint mysql.BinlogCoordinates
 }
 
-func NewGoMySQLReader(migrationContext *base.MigrationContext) (binlogReader *GoMySQLReader, err error) {
-	binlogReader = &GoMySQLReader{
+func NewGoMySQLReader(migrationContext *base.MigrationContext) *GoMySQLReader {
+	connectionConfig := migrationContext.InspectorConnectionConfig
+	return &GoMySQLReader{
 		migrationContext:        migrationContext,
-		connectionConfig:        migrationContext.InspectorConnectionConfig,
+		connectionConfig:        connectionConfig,
 		currentCoordinates:      nil,
 		currentCoordinatesMutex: &sync.Mutex{},
-		binlogSyncer:            nil,
-		binlogStreamer:          nil,
+		binlogSyncer: replication.NewBinlogSyncer(replication.BinlogSyncerConfig{
+			ServerID:   uint32(migrationContext.ReplicaServerId),
+			Flavor:     gomysql.MySQLFlavor,
+			Host:       connectionConfig.Key.Hostname,
+			Port:       uint16(connectionConfig.Key.Port),
+			User:       connectionConfig.User,
+			Password:   connectionConfig.Password,
+			TLSConfig:  connectionConfig.TLSConfig(),
+			UseDecimal: true,
+		}),
 	}
-
-	serverId := uint32(migrationContext.ReplicaServerId)
-
-	binlogSyncerConfig := replication.BinlogSyncerConfig{
-		ServerID:   serverId,
-		Flavor:     "mysql",
-		Host:       binlogReader.connectionConfig.Key.Hostname,
-		Port:       uint16(binlogReader.connectionConfig.Key.Port),
-		User:       binlogReader.connectionConfig.User,
-		Password:   binlogReader.connectionConfig.Password,
-		TLSConfig:  binlogReader.connectionConfig.TLSConfig(),
-		UseDecimal: true,
-	}
-	binlogReader.binlogSyncer = replication.NewBinlogSyncer(binlogSyncerConfig)
-
-	return binlogReader, err
 }
 
 // ConnectBinlogStreamer
