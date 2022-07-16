@@ -16,11 +16,11 @@ func init() {
 	log.SetLevel(log.ERROR)
 }
 
-func TestBinlogCoordinates(t *testing.T) {
-	c1 := BinlogCoordinates{LogFile: "mysql-bin.00017", LogPos: 104}
-	c2 := BinlogCoordinates{LogFile: "mysql-bin.00017", LogPos: 104}
-	c3 := BinlogCoordinates{LogFile: "mysql-bin.00017", LogPos: 5000}
-	c4 := BinlogCoordinates{LogFile: "mysql-bin.00112", LogPos: 104}
+func TestFileBinlogCoordinates(t *testing.T) {
+	c1 := FileBinlogCoordinates{LogFile: "mysql-bin.00017", LogPos: 104}
+	c2 := FileBinlogCoordinates{LogFile: "mysql-bin.00017", LogPos: 104}
+	c3 := FileBinlogCoordinates{LogFile: "mysql-bin.00017", LogPos: 5000}
+	c4 := FileBinlogCoordinates{LogFile: "mysql-bin.00112", LogPos: 104}
 
 	test.S(t).ExpectTrue(c1.Equals(&c2))
 	test.S(t).ExpectFalse(c1.Equals(&c3))
@@ -37,13 +37,13 @@ func TestBinlogCoordinates(t *testing.T) {
 	test.S(t).ExpectTrue(c1.SmallerThanOrEquals(&c3))
 }
 
-func TestBinlogCoordinatesAsKey(t *testing.T) {
-	m := make(map[BinlogCoordinates]bool)
+func TestFileBinlogCoordinatesAsKey(t *testing.T) {
+	m := make(map[FileBinlogCoordinates]bool)
 
-	c1 := BinlogCoordinates{LogFile: "mysql-bin.00017", LogPos: 104}
-	c2 := BinlogCoordinates{LogFile: "mysql-bin.00022", LogPos: 104}
-	c3 := BinlogCoordinates{LogFile: "mysql-bin.00017", LogPos: 104}
-	c4 := BinlogCoordinates{LogFile: "mysql-bin.00017", LogPos: 222}
+	c1 := FileBinlogCoordinates{LogFile: "mysql-bin.00017", LogPos: 104}
+	c2 := FileBinlogCoordinates{LogFile: "mysql-bin.00022", LogPos: 104}
+	c3 := FileBinlogCoordinates{LogFile: "mysql-bin.00017", LogPos: 104}
+	c4 := FileBinlogCoordinates{LogFile: "mysql-bin.00017", LogPos: 222}
 
 	m[c1] = true
 	m[c2] = true
