@@ -1,5 +1,5 @@
 /*
-   Copyright 2016 GitHub Inc.
+   Copyright 2022 GitHub Inc.
 	 See https://github.com/github/gh-ost/blob/master/LICENSE
 */
 
@@ -19,14 +19,6 @@ type BinlogEntry struct {
 	DmlEvent *BinlogDMLEvent
 }
 
-// NewFileBinlogEntry creates an empty, ready to go BinlogEntry object
-func NewFileBinlogEntry(logFile string, logPos uint64) *BinlogEntry {
-	binlogEntry := &BinlogEntry{
-		Coordinates: &mysql.FileBinlogCoordinates{LogFile: logFile, LogPos: int64(logPos)},
-	}
-	return binlogEntry
-}
-
 // NewBinlogEntryAt creates an empty, ready to go BinlogEntry object
 func NewBinlogEntryAt(coordinates mysql.BinlogCoordinates) *BinlogEntry {
 	binlogEntry := &BinlogEntry{
@@ -37,11 +29,8 @@ func NewBinlogEntryAt(coordinates mysql.BinlogCoordinates) *BinlogEntry {
 
 // Duplicate creates and returns a new binlog entry, with some of the attributes pre-assigned
 func (this *BinlogEntry) Duplicate() (binlogEntry *BinlogEntry) {
-	switch coordinates := this.Coordinates.(type) {
-	case *mysql.FileBinlogCoordinates:
-		binlogEntry = NewFileBinlogEntry(coordinates.LogFile, uint64(coordinates.LogPos))
-		binlogEntry.EndLogPos = this.EndLogPos
-	}
+	binlogEntry = NewBinlogEntryAt(this.Coordinates)
+	binlogEntry.DmlEvent = this.DmlEvent
 	return binlogEntry
 }
 

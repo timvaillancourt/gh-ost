@@ -33,7 +33,6 @@ func NewGoMySQLReader(migrationContext *base.MigrationContext) *GoMySQLReader {
 	return &GoMySQLReader{
 		migrationContext:        migrationContext,
 		connectionConfig:        connectionConfig,
-		currentCoordinates:      nil,
 		currentCoordinatesMutex: &sync.Mutex{},
 		binlogSyncer: replication.NewBinlogSyncer(replication.BinlogSyncerConfig{
 			ServerID:   uint32(migrationContext.ReplicaServerId),
