@@ -1,16 +1,28 @@
 name: migration tests
-
-on: [pull_request]
-
+on: 
+  - pull_request
 jobs:
   build:
-
     runs-on: ubuntu-latest
     strategy:
       matrix:
-        version: [mysql-5.7.25,mysql-8.0.16]
-
+        image: 
+        - "mysql:5.7"
+        - "mysql:8.0"
     steps:
+
+    - name: Start MySQL in Docker
+      uses: addnab/docker-run-action@v3
+      with:
+        image: ${{ matrix.image }}
+        options: "-d -p 3306:3306 -e MYSQL_ALLOW_EMPTY_PASSWORD=true -v resources/localtest-init.sql:/docker-entrypoint-initdb.d/init-gh-ost.sql"
+        run: |
+          --log-slave-updates
+          --log-bin
+          --binlog-format=ROW
+          --gtid_mode=ON
+          --enforce-gtid-consistency=ON
+
     - uses: actions/checkout@v2
 
     - name: Set up Go
@@ -18,7 +30,8 @@ jobs:
       with:
         go-version: 1.17
 
+    - name: Build
+      run: script/cibuild
+
     - name: migration tests
-      env:
-        TEST_MYSQL_VERSION: ${{ matrix.version }}
-      run:  script/cibuild-gh-ost-replica-tests
+      run: "localtests/test.sh -b bin/gh-ost"
