@@ -22,11 +22,11 @@ type FileBinlogCoordinates struct {
 func ParseFileBinlogCoordinates(logFileLogPos string) (*FileBinlogCoordinates, error) {
 	tokens := strings.SplitN(logFileLogPos, ":", 2)
 	if len(tokens) != 2 {
-		return nil, fmt.Errorf("ParseBinlogCoordinates: Cannot parse BinlogCoordinates from %s. Expected format is file:pos", logFileLogPos)
+		return nil, fmt.Errorf("ParseFileBinlogCoordinates: Cannot parse BinlogCoordinates from %s. Expected format is file:pos", logFileLogPos)
 	}
 
 	if logPos, err := strconv.ParseInt(tokens[1], 10, 0); err != nil {
-		return nil, fmt.Errorf("ParseBinlogCoordinates: invalid pos: %s", tokens[1])
+		return nil, fmt.Errorf("ParseFileBinlogCoordinates: invalid pos: %s", tokens[1])
 	} else {
 		return &FileBinlogCoordinates{LogFile: tokens[0], LogPos: logPos}, nil
 	}
