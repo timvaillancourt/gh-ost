@@ -10,6 +10,7 @@ jobs:
         - "mysql:5.7"
         - "mysql:8.0"
     steps:
+    - uses: actions/checkout@v2
 
     - name: Start MySQL in Docker
       uses: addnab/docker-run-action@v3
@@ -22,8 +23,6 @@ jobs:
           --binlog-format=ROW
           --gtid_mode=ON
           --enforce-gtid-consistency=ON
-
-    - uses: actions/checkout@v2
 
     - name: Set up Go
       uses: actions/setup-go@v1
