@@ -39,6 +39,7 @@ type Column struct {
 	Type                 ColumnType
 	EnumValues           string
 	timezoneConversion   *TimezoneConversion
+	enumToEnumConversion bool
 	enumToTextConversion bool
 	// add Octet length for binary type, fix bytes with suffix "00" get clipped in mysql binlog.
 	// https://github.com/github/gh-ost/issues/909
@@ -205,6 +206,10 @@ func (this *ColumnList) SetEnumToTextConversion(columnName string) {
 
 func (this *ColumnList) IsEnumToTextConversion(columnName string) bool {
 	return this.GetColumn(columnName).enumToTextConversion
+}
+
+func (this *ColumnList) SetEnumToEnumConversion(columnName string) {
+	this.GetColumn(columnName).enumToEnumConversion = true
 }
 
 func (this *ColumnList) SetEnumValues(columnName string, enumValues string) {

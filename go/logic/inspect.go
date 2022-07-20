@@ -185,12 +185,20 @@ func (this *Inspector) inspectOriginalAndGhostTables() (err error) {
 	for i := range this.migrationContext.SharedColumns.Columns() {
 		column := this.migrationContext.SharedColumns.Columns()[i]
 		mappedColumn := this.migrationContext.MappedSharedColumns.Columns()[i]
-		if column.Name == mappedColumn.Name && column.Type == sql.DateTimeColumnType && mappedColumn.Type == sql.TimestampColumnType {
+		if column.Name != mappedColumn.Name {
+			continue
+		}
+		if column.Type == sql.DateTimeColumnType && mappedColumn.Type == sql.TimestampColumnType {
 			this.migrationContext.MappedSharedColumns.SetConvertDatetimeToTimestamp(column.Name, this.migrationContext.ApplierTimeZone)
 		}
-		if column.Name == mappedColumn.Name && column.Type == sql.EnumColumnType && mappedColumn.Charset != "" {
-			this.migrationContext.MappedSharedColumns.SetEnumToTextConversion(column.Name)
-			this.migrationContext.MappedSharedColumns.SetEnumValues(column.Name, column.EnumValues)
+		if column.Type == sql.EnumColumnType {
+			if mappedColumn.Type == sql.EnumColumnType {
+				this.migrationContext.MappedSharedColumns.SetEnumToEnumConversion(column.Name)
+				this.migrationContext.MappedSharedColumns.SetEnumValues(column.Name, mappedColumn.EnumValues)
+			} else if mappedColumn.Charset != "" {
+				this.migrationContext.MappedSharedColumns.SetEnumToTextConversion(column.Name)
+				this.migrationContext.MappedSharedColumns.SetEnumValues(column.Name, column.EnumValues)
+			}
 		}
 	}
 
