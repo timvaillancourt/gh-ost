@@ -1,1 +1,1 @@
---alter="MODIFY COLUMN Result enum('Pass','MostExcellent') NOT NULL"
+--alter="MODIFY COLUMN result enum('Pass','MostExcellent') NOT NULL"

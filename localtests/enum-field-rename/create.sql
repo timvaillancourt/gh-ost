@@ -2,7 +2,7 @@ drop table if exists gh_ost_test;
 create table gh_ost_test (
   id int auto_increment,
   i int not null,
-  e enum('Pass', 'Fail') not null collate 'utf8_bin',
+  result enum('Pass', 'Fail') not null collate 'utf8_bin',
   primary key(id)
 ) auto_increment=1;
 
@@ -22,5 +22,5 @@ begin
   insert into gh_ost_test values (null, 13, 'Pass');
   insert into gh_ost_test values (null, 17, 'Fail');
   set @last_insert_id := last_insert_id();
-  update gh_ost_test set e='Fail' where id = @last_insert_id;
+  update gh_ost_test set result='Fail' where id = @last_insert_id;
 end ;;
