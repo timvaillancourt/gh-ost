@@ -9,15 +9,18 @@ jobs:
         image: 
         - "mysql:5.7"
         - "mysql:8.0"
+        - "percona:5.7"
+        - "percona:8.0"
     steps:
     - uses: actions/checkout@v2
 
-    - name: Start MySQL in Docker
+    - name: "Start ${{ matrix.image}}"
       uses: addnab/docker-run-action@v3
       with:
         image: ${{ matrix.image }}
         options: "-d -p 3306:3306 -e MYSQL_ALLOW_EMPTY_PASSWORD=true -v ${{ github.workspace }}/resources/localtests-init.sql:/docker-entrypoint-initdb.d/init.sql"
         run: |
+          --server-id=1
           --log-slave-updates
           --log-bin
           --binlog-format=ROW
