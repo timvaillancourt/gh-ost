@@ -36,33 +36,41 @@ shift $((OPTIND-1))
 
 test_pattern="${1:-.}"
 
+exec_mysql_master() {
+  mysql -h 127.0.0.1 -P 3306 -uroot $*
+}
+
+exec_mysql_replica() {
+  mysql -h 127.0.0.1 -P 3307 -uroot $*
+}
+
 verify_master_and_replica() {
-  if [ "$(gh-ost-test-mysql-master -e "select 1" -ss)" != "1" ] ; then
-    echo "Cannot verify gh-ost-test-mysql-master"
+  if [ "$(exec_mysql_master -e "select 1" -ss)" != "1" ] ; then
+    echo "Cannot verify exec_mysql_master"
     exit 1
   fi
-  read master_host master_port <<< $(gh-ost-test-mysql-master -e "select @@hostname, @@port" -ss)
+  read master_host master_port <<< $(exec_mysql_master -e "select @@hostname, @@port" -ss)
   [ "$master_host" == "$(hostname)" ] && master_host="127.0.0.1"
   echo "# master verified at $master_host:$master_port"
-  if ! gh-ost-test-mysql-master -e "set global event_scheduler := 1" ; then
+  if ! exec_mysql_master -e "set global event_scheduler := 1" ; then
     echo "Cannot enable event_scheduler on master"
     exit 1
   fi
-  original_sql_mode="$(gh-ost-test-mysql-master -e "select @@global.sql_mode" -s -s)"
+  original_sql_mode="$(exec_mysql_master -e "select @@global.sql_mode" -s -s)"
   echo "sql_mode on master is ${original_sql_mode}"
 
   echo "Gracefully sleeping for 3 seconds while replica is setting up..."
   sleep 3
 
-  if [ "$(gh-ost-test-mysql-replica -e "select 1" -ss)" != "1" ] ; then
-    echo "Cannot verify gh-ost-test-mysql-replica"
+  if [ "$(exec_mysql_replica -e "select 1" -ss)" != "1" ] ; then
+    echo "Cannot verify exec_mysql_replica"
     exit 1
   fi
-  if [ "$(gh-ost-test-mysql-replica -e "select @@global.binlog_format" -ss)" != "ROW" ] ; then
+  if [ "$(exec_mysql_replica -e "select @@global.binlog_format" -ss)" != "ROW" ] ; then
     echo "Expecting test replica to have binlog_format=ROW"
     exit 1
   fi
-  read replica_host replica_port <<< $(gh-ost-test-mysql-replica -e "select @@hostname, @@port" -ss)
+  read replica_host replica_port <<< $(exec_mysql_replica -e "select @@hostname, @@port" -ss)
   [ "$replica_host" == "$(hostname)" ] && replica_host="127.0.0.1"
   echo "# replica verified at $replica_host:$replica_port"
 }
@@ -78,9 +86,9 @@ echo_dot() {
 }
 
 start_replication() {
-  gh-ost-test-mysql-replica -e "stop slave; start slave;"
+  exec_mysql_replica -e "stop slave; start slave;"
   num_attempts=0
-  while gh-ost-test-mysql-replica -e "show slave status\G" | grep Seconds_Behind_Master | grep -q NULL ; do
+  while exec_mysql_replica -e "show slave status\G" | grep Seconds_Behind_Master | grep -q NULL ; do
     ((num_attempts=num_attempts+1))
     if [ $num_attempts -gt 10 ] ; then
       echo
@@ -98,7 +106,7 @@ test_single() {
 
   if [ -f $tests_path/$test_name/ignore_versions ] ; then
     ignore_versions=$(cat $tests_path/$test_name/ignore_versions)
-    mysql_version=$(gh-ost-test-mysql-master -s -s -e "select @@version")
+    mysql_version=$(exec_mysql_master -s -s -e "select @@version")
     if echo "$mysql_version" | egrep -q "^${ignore_versions}" ; then
       echo -n "Skipping: $test_name"
       return 0
@@ -112,11 +120,11 @@ test_single() {
   echo_dot
 
   if [ -f $tests_path/$test_name/sql_mode ] ; then
-    gh-ost-test-mysql-master --default-character-set=utf8mb4 test -e "set @@global.sql_mode='$(cat $tests_path/$test_name/sql_mode)'"
-    gh-ost-test-mysql-replica --default-character-set=utf8mb4 test -e "set @@global.sql_mode='$(cat $tests_path/$test_name/sql_mode)'"
+    exec_mysql_master --default-character-set=utf8mb4 test -e "set @@global.sql_mode='$(cat $tests_path/$test_name/sql_mode)'"
+    exec_mysql_replica --default-character-set=utf8mb4 test -e "set @@global.sql_mode='$(cat $tests_path/$test_name/sql_mode)'"
   fi
 
-  gh-ost-test-mysql-master --default-character-set=utf8mb4 test < $tests_path/$test_name/create.sql
+  exec_mysql_master --default-character-set=utf8mb4 test < $tests_path/$test_name/create.sql
 
   extra_args=""
   if [ -f $tests_path/$test_name/extra_args ] ; then
@@ -170,12 +178,12 @@ test_single() {
   execution_result=$?
 
   if [ -f $tests_path/$test_name/sql_mode ] ; then
-    gh-ost-test-mysql-master --default-character-set=utf8mb4 test -e "set @@global.sql_mode='${original_sql_mode}'"
-    gh-ost-test-mysql-replica --default-character-set=utf8mb4 test -e "set @@global.sql_mode='${original_sql_mode}'"
+    exec_mysql_master --default-character-set=utf8mb4 test -e "set @@global.sql_mode='${original_sql_mode}'"
+    exec_mysql_replica --default-character-set=utf8mb4 test -e "set @@global.sql_mode='${original_sql_mode}'"
   fi
 
   if [ -f $tests_path/$test_name/destroy.sql ] ; then
-    gh-ost-test-mysql-master --default-character-set=utf8mb4 test < $tests_path/$test_name/destroy.sql
+    exec_mysql_master --default-character-set=utf8mb4 test < $tests_path/$test_name/destroy.sql
   fi
 
   if [ -f $tests_path/$test_name/expect_failure ] ; then
@@ -205,7 +213,7 @@ test_single() {
     return 1
   fi
 
-  gh-ost-test-mysql-replica --default-character-set=utf8mb4 test -e "show create table _gh_ost_test_gho\G" -ss > $ghost_structure_output_file
+  exec_mysql_replica --default-character-set=utf8mb4 test -e "show create table _gh_ost_test_gho\G" -ss > $ghost_structure_output_file
 
   if [ -f $tests_path/$test_name/expect_table_structure ] ; then
     expected_table_structure="$(cat $tests_path/$test_name/expect_table_structure)"
@@ -218,14 +226,14 @@ test_single() {
   fi
 
   echo_dot
-  gh-ost-test-mysql-replica --default-character-set=utf8mb4 test -e "select ${orig_columns} from gh_ost_test ${order_by}" -ss > $orig_content_output_file
-  gh-ost-test-mysql-replica --default-character-set=utf8mb4 test -e "select ${ghost_columns} from _gh_ost_test_gho ${order_by}" -ss > $ghost_content_output_file
+  exec_mysql_replica --default-character-set=utf8mb4 test -e "select ${orig_columns} from gh_ost_test ${order_by}" -ss > $orig_content_output_file
+  exec_mysql_replica --default-character-set=utf8mb4 test -e "select ${ghost_columns} from _gh_ost_test_gho ${order_by}" -ss > $ghost_content_output_file
   orig_checksum=$(cat $orig_content_output_file | md5sum)
   ghost_checksum=$(cat $ghost_content_output_file | md5sum)
 
   if [ "$orig_checksum" != "$ghost_checksum" ] ; then
-    gh-ost-test-mysql-replica --default-character-set=utf8mb4 test -e "select ${orig_columns} from gh_ost_test" -ss > $orig_content_output_file
-    gh-ost-test-mysql-replica --default-character-set=utf8mb4 test -e "select ${ghost_columns} from _gh_ost_test_gho" -ss > $ghost_content_output_file
+    exec_mysql_replica --default-character-set=utf8mb4 test -e "select ${orig_columns} from gh_ost_test" -ss > $orig_content_output_file
+    exec_mysql_replica --default-character-set=utf8mb4 test -e "select ${ghost_columns} from _gh_ost_test_gho" -ss > $ghost_content_output_file
     echo "ERROR $test_name: checksum mismatch"
     echo "---"
     diff $orig_content_output_file $ghost_content_output_file
@@ -258,7 +266,7 @@ test_all() {
   find $tests_path ! -path . -type d -mindepth 1 -maxdepth 1 | cut -d "/" -f 3 | egrep "$test_pattern" | while read test_name ; do
     test_single "$test_name"
     if [ $? -ne 0 ] ; then
-      create_statement=$(gh-ost-test-mysql-replica test -t -e "show create table _gh_ost_test_gho \G")
+      create_statement=$(exec_mysql_replica test -t -e "show create table _gh_ost_test_gho \G")
       echo "$create_statement" >> $test_logfile
       echo "+ FAIL"
       return 1
@@ -266,7 +274,7 @@ test_all() {
       echo
       echo "+ pass"
     fi
-    gh-ost-test-mysql-replica -e "start slave"
+    exec_mysql_replica -e "start slave"
   done
 }
 

@@ -1,0 +1,16 @@
+version: "3.5"
+services:
+  primary:
+    image: mysql:5.7 
+    command: --log-bin --gtid-mode=ON --enforce-gtid-consistency=ON --server-id=1
+    environment:
+      MYSQL_ROOT_PASSWORD: 123456
+    volumes:
+      - ./localtests/init-primary.sql:/docker-entrypoint-initdb.d/init.sql:ro
+  replica:
+    image: mysql:5.7 
+    command: --log-bin --gtid-mode=ON --enforce-gtid-consistency=ON --server-id=2 --read-only=ON --log-slave-updates
+    environment:
+      MYSQL_ROOT_PASSWORD: 123456
+    volumes:
+      - ./localtests/init-replica.sql:/docker-entrypoint-initdb.d/init.sql:ro
