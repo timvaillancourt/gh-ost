@@ -1,0 +1,47 @@
+version: "3.6"
+services:
+  primary:
+    image: "${MYSQL_SERVER_IMAGE}"
+    command: |
+      --log-bin
+      --gtid-mode=ON
+      --enforce-gtid-consistency=ON
+      --binlog-row-image=FULL
+      --server-id=1
+    environment:
+      MYSQL_ROOT_PASSWORD: "${MYSQL_ROOT_PASSWORD}"
+    volumes:
+      - "./init-primary.sql:/docker-entrypoint-initdb.d/init.sql:ro"
+  replica:
+    image: "${MYSQL_SERVER_IMAGE}"
+    command: |
+      --log-bin
+      --log-slave-updates
+      --gtid-mode=ON
+      --enforce-gtid-consistency=ON
+      --binlog-row-image=FULL
+      --server-id=2
+      --read-only=ON
+    environment:
+      MYSQL_ROOT_PASSWORD: "${MYSQL_ROOT_PASSWORD}"
+    depends_on:
+      - primary
+    volumes:
+      - "./init-replica.sql:/docker-entrypoint-initdb.d/init.sql:ro"
+  wait_for_replica:
+    image: "${MYSQL_SERVER_IMAGE}"
+    command: "/wait-for-replica.sh replica"
+    entrypoint: bash
+    environment:
+      MYSQL_ROOT_PASSWORD: "${MYSQL_ROOT_PASSWORD}"
+    depends_on:
+      - primary
+      - replica
+    volumes:
+      - "./wait-for-replica.sh:/wait-for-replica.sh:ro"
+  test:
+    build: .
+    depends_on:
+      - primary
+      - replica
+      - wait_for_replica
