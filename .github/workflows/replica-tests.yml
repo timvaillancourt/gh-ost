@@ -11,19 +11,21 @@ jobs:
         - "mysql:8.0"
         - "percona:5.7"
         - "percona:8.0"
+
     steps:
-    - uses: actions/checkout@v2
 
     - name: "Pull ${{ matrix.image}} image"
       run: "docker pull ${{ matrix.image }}"
 
-    - name: "Start mysql primary/replica in docker-compose"
+    - uses: actions/checkout@v2
+
+    - name: "Start ${{ matrix.image }} primary/replica in docker-compose"
       env:
         MYSQL_SERVER_IMAGE: ${{ matrix.image }}
         MYSQL_ROOT_PASSWORD: ${{ secrets.MYSQL_ROOT_PASSWORD }}
       run: "docker-compose -f localtests/docker-compose.yaml up -d primary replica"
 
-    - name: "Wait for mysql replica"
+    - name: "Wait for replica"
       env:
         MYSQL_SERVER_IMAGE: ${{ matrix.image }}
         MYSQL_ROOT_PASSWORD: ${{ secrets.MYSQL_ROOT_PASSWORD }}
