@@ -1,6 +1,6 @@
 name: migration tests
 on: 
-  - pull_request
+  pull_request:
 jobs:
   build:
     runs-on: ubuntu-latest
@@ -14,23 +14,23 @@ jobs:
     steps:
     - uses: actions/checkout@v2
 
-    - name: "Start ${{ matrix.image}}"
-      uses: addnab/docker-run-action@v3
-      with:
-        image: ${{ matrix.image }}
-        options: "-d -p 3306:3306 -e MYSQL_ALLOW_EMPTY_PASSWORD=true -v ${{ github.workspace }}/resources/localtests-init.sql:/docker-entrypoint-initdb.d/init.sql"
-        run: |
-          --server-id=1
-          --log-slave-updates
-          --log-bin
-          --binlog-format=ROW
-          --gtid_mode=ON
-          --enforce-gtid-consistency=ON
+    - name: "Pull ${{ matrix.image}} image"
+      run: "docker pull ${{ matrix.image }}"
 
-    - name: Set up Go
-      uses: actions/setup-go@v1
-      with:
-        go-version: 1.17
+    - name: "Start mysql primary/replica in docker-compose"
+      env:
+        MYSQL_SERVER_IMAGE: ${{ matrix.image }}
+        MYSQL_ROOT_PASSWORD: ${{ secrets.MYSQL_ROOT_PASSWORD }}
+      run: "docker-compose -f localtests/docker-compose.yaml up -d primary replica"
 
-    - name: migration tests
-      run: "localtests/test.sh -b bin/gh-ost"
+    - name: "Wait for mysql replica"
+      env:
+        MYSQL_SERVER_IMAGE: ${{ matrix.image }}
+        MYSQL_ROOT_PASSWORD: ${{ secrets.MYSQL_ROOT_PASSWORD }}
+      run: "docker-compose -f localtests/docker-compose.yaml up wait_for_replica"
+
+    - name: "Run localtests"
+      env:
+        MYSQL_SERVER_IMAGE: ${{ matrix.image }}
+        MYSQL_ROOT_PASSWORD: ${{ secrets.MYSQL_ROOT_PASSWORD }}
+      run: "docker-compose -f localtests/docker-compose.yaml up --build test"
