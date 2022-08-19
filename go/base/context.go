@@ -144,6 +144,8 @@ type MigrationContext struct {
 	HooksHintOwner                      string
 	HooksHintToken                      string
 	HooksStatusIntervalSec              int64
+	UseSemiSyncTimeout                  bool
+	SemiSyncTimeoutRatio                float64
 
 	DropServeSocket bool
 	ServeSocketFile string

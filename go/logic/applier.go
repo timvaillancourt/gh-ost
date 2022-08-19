@@ -6,7 +6,9 @@
 package logic
 
 import (
+	"context"
 	gosql "database/sql"
+	"errors"
 	"fmt"
 	"sync"
 	"sync/atomic"
@@ -24,6 +26,7 @@ import (
 const (
 	GhostChangelogTableComment = "gh-ost changelog"
 	atomicCutOverMagicHint     = "ghost-cut-over-sentry"
+	semiSyncMasterTimeoutRatio = 0.9
 )
 
 type dmlBuildResult struct {
@@ -58,6 +61,7 @@ type Applier struct {
 	db                *gosql.DB
 	singletonDB       *gosql.DB
 	migrationContext  *base.MigrationContext
+	writeTimeout      time.Duration
 	finishedMigrating int64
 	name              string
 }
@@ -71,9 +75,38 @@ func NewApplier(migrationContext *base.MigrationContext) *Applier {
 	}
 }
 
+func (this *Applier) getDBWriteTimeout() (timeout time.Duration, err error) {
+	if this.migrationContext.UseSemiSyncTimeout {
+		return timeout, nil
+	}
+	var timeoutMillis float64
+	var enabled, waitNoSlave string
+	query := `select @@global.rpl_semi_sync_master_enabled,
+		@@global.rpl_semi_sync_master_timeout,
+		@@global.rpl_semi_sync_master_wait_no_slave`
+	if err = this.db.QueryRow(query).Scan(&enabled, &timeoutMillis, &waitNoSlave); err != nil {
+		return timeout, err
+	}
+	if enabled != "ON" {
+		return timeout, errors.New("--semi-sync-timeout set but 'rpl_semi_sync_master_enabled' is 'OFF' on the applier")
+	}
+	if waitNoSlave != "ON" {
+		return timeout, errors.New("--semi-sync-timeout set but 'rpl_semi_sync_master_wait_no_slave' is 'OFF' on the applier. This configuration is unsupported")
+	}
+	timeoutMillis = timeoutMillis * this.migrationContext.SemiSyncTimeoutRatio
+	return time.Duration(timeoutMillis) * time.Millisecond, nil
+}
+
+func (this *Applier) getWriteTimeoutContext() (context.Context, context.CancelFunc) {
+	return context.WithTimeout(context.Background(), this.writeTimeout)
+}
+
 func (this *Applier) InitDBConnections() (err error) {
 	applierUri := this.connectionConfig.GetDBUri(this.migrationContext.DatabaseName)
 	if this.db, _, err = mysql.GetDB(this.migrationContext.Uuid, applierUri); err != nil {
+		return err
+	}
+	if this.writeTimeout, err = this.getDBWriteTimeout(); err != nil {
 		return err
 	}
 	singletonApplierUri := fmt.Sprintf("%s&timeout=0", applierUri)
@@ -214,7 +247,10 @@ func (this *Applier) CreateGhostTable() error {
 		if _, err := tx.Exec(sessionQuery); err != nil {
 			return err
 		}
-		if _, err := tx.Exec(query); err != nil {
+
+		ctx, cancel := this.getWriteTimeoutContext()
+		defer cancel()
+		if _, err := tx.ExecContext(ctx, query); err != nil {
 			return err
 		}
 		this.migrationContext.Log.Infof("Ghost table created")
@@ -251,11 +287,13 @@ func (this *Applier) AlterGhost() error {
 
 		sessionQuery := fmt.Sprintf(`SET SESSION time_zone = '%s'`, this.migrationContext.ApplierTimeZone)
 		sessionQuery = fmt.Sprintf("%s, %s", sessionQuery, this.generateSqlModeQuery())
-
 		if _, err := tx.Exec(sessionQuery); err != nil {
 			return err
 		}
-		if _, err := tx.Exec(query); err != nil {
+
+		ctx, cancel := this.getWriteTimeoutContext()
+		defer cancel()
+		if _, err := tx.ExecContext(ctx, query); err != nil {
 			return err
 		}
 		this.migrationContext.Log.Infof("Ghost table altered")
@@ -604,14 +642,17 @@ func (this *Applier) ApplyIterationInsertQuery() (chunkSize int64, rowsAffected 
 
 		sessionQuery := fmt.Sprintf(`SET SESSION time_zone = '%s'`, this.migrationContext.ApplierTimeZone)
 		sessionQuery = fmt.Sprintf("%s, %s", sessionQuery, this.generateSqlModeQuery())
-
 		if _, err := tx.Exec(sessionQuery); err != nil {
 			return nil, err
 		}
-		result, err := tx.Exec(query, explodedArgs...)
+
+		ctx, cancel := this.getWriteTimeoutContext()
+		defer cancel()
+		result, err := tx.ExecContext(ctx, query, explodedArgs...)
 		if err != nil {
 			return nil, err
 		}
+
 		if err := tx.Commit(); err != nil {
 			return nil, err
 		}
@@ -1125,20 +1166,23 @@ func (this *Applier) ApplyDMLEventQueries(dmlEvents [](*binlog.BinlogDMLEvent)) 
 				if buildResult.err != nil {
 					return rollback(buildResult.err)
 				}
-				result, err := tx.Exec(buildResult.query, buildResult.args...)
-				if err != nil {
-					err = fmt.Errorf("%s; query=%s; args=%+v", err.Error(), buildResult.query, buildResult.args)
-					return rollback(err)
-				}
-
-				rowsAffected, err := result.RowsAffected()
-				if err != nil {
-					log.Warningf("error getting rows affected from DML event query: %s. i'm going to assume that the DML affected a single row, but this may result in inaccurate statistics", err)
-					rowsAffected = 1
-				}
-				// each DML is either a single insert (delta +1), update (delta +0) or delete (delta -1).
-				// multiplying by the rows actually affected (either 0 or 1) will give an accurate row delta for this DML event
-				totalDelta += buildResult.rowsDelta * rowsAffected
+				func() {
+					ctx, cancel := this.getWriteTimeoutContext()
+					defer cancel()
+					result, err := tx.Exec(buildResult.query, buildResult.args...)
+					if err != nil {
+						err = fmt.Errorf("%s; query=%s; args=%+v", err.Error(), buildResult.query, buildResult.args)
+						return rollback(err)
+					}
+					rowsAffected, err := result.RowsAffected()
+					if err != nil {
+						log.Warningf("error getting rows affected from DML event query: %s. i'm going to assume that the DML affected a single row, but this may result in inaccurate statistics", err)
+						rowsAffected = 1
+					}
+					// each DML is either a single insert (delta +1), update (delta +0) or delete (delta -1).
+					// multiplying by the rows actually affected (either 0 or 1) will give an accurate row delta for this DML event
+					totalDelta += buildResult.rowsDelta * rowsAffected
+				}()
 			}
 		}
 		if err := tx.Commit(); err != nil {
