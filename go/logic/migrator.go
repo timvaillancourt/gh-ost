@@ -730,10 +730,10 @@ func (this *Migrator) atomicCutOver() (err error) {
 
 // initiateServer begins listening on unix socket/tcp for incoming interactive commands
 func (this *Migrator) initiateServer() (err error) {
-	var f printStatusFunc = func(rule PrintStatusRule, writer io.Writer) {
+	var f PrintStatusFunc = func(rule PrintStatusRule, writer io.Writer) {
 		this.printStatus(rule, writer)
 	}
-	this.server = NewServer(this.migrationContext, this.hooksExecutor, f)
+	this.server = NewServer(this.migrationContext, this.hooksExecutor, f, this.appVersion)
 	if err := this.server.BindSocketFile(); err != nil {
 		return err
 	}

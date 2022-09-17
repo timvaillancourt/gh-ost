@@ -1,5 +1,6 @@
 /*
    Copyright 2015 Shlomi Noach, courtesy Booking.com
+   Copyright 2022 GitHub Inc.
 	 See https://github.com/github/gh-ost/blob/master/LICENSE
 */
 
@@ -7,6 +8,7 @@ package mysql
 
 import (
 	"encoding/json"
+	"sort"
 	"strings"
 )
 
@@ -48,6 +50,15 @@ func (this *InstanceKeyMap) GetInstanceKeys() []InstanceKey {
 	return res
 }
 
+// GetSortedInstanceKeys returns a sorted slice of instance keys
+func (this *InstanceKeyMap) GetSortedInstanceKeys() []InstanceKey {
+	keys := this.GetInstanceKeys()
+	sort.SliceStable(keys, func(i, j int) bool {
+		return keys[i].String() < keys[j].String()
+	})
+	return keys
+}
+
 // MarshalJSON will marshal this map as JSON
 func (this *InstanceKeyMap) MarshalJSON() ([]byte, error) {
 	return json.Marshal(this.GetInstanceKeys())
@@ -65,10 +76,10 @@ func (this *InstanceKeyMap) ToJSONString() string {
 	return s
 }
 
-// ToCommaDelimitedList will export this map in comma delimited format
+// ToCommaDelimitedList will export this map in a sorted comma delimited format
 func (this *InstanceKeyMap) ToCommaDelimitedList() string {
 	keyDisplays := []string{}
-	for key := range *this {
+	for _, key := range this.GetSortedInstanceKeys() {
 		keyDisplays = append(keyDisplays, key.DisplayString())
 	}
 	return strings.Join(keyDisplays, ",")

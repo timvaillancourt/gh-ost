@@ -11,26 +11,32 @@ import (
 	"io"
 	"net"
 	"os"
+	"sort"
 	"strconv"
 	"strings"
 	"sync/atomic"
+	"text/tabwriter"
 
 	"github.com/github/gh-ost/go/base"
 )
 
-type printStatusFunc func(PrintStatusRule, io.Writer)
+const throttleHint = "# Note: you may only throttle for as long as your binary logs are not purged\n"
+
+type PrintStatusFunc func(PrintStatusRule, io.Writer)
 
 // Server listens for requests on a socket file or via TCP
 type Server struct {
+	appVersion       string
 	migrationContext *base.MigrationContext
 	unixListener     net.Listener
 	tcpListener      net.Listener
 	hooksExecutor    *HooksExecutor
-	printStatus      printStatusFunc
+	printStatus      PrintStatusFunc
 }
 
-func NewServer(migrationContext *base.MigrationContext, hooksExecutor *HooksExecutor, printStatus printStatusFunc) *Server {
+func NewServer(migrationContext *base.MigrationContext, hooksExecutor *HooksExecutor, printStatus PrintStatusFunc, appVersion string) *Server {
 	return &Server{
+		appVersion:       appVersion,
 		migrationContext: migrationContext,
 		hooksExecutor:    hooksExecutor,
 		printStatus:      printStatus,
@@ -120,125 +126,161 @@ func (this *Server) onServerCommand(command string, writer *bufio.Writer) (err e
 	return this.migrationContext.Log.Errore(err)
 }
 
-// applyServerCommand parses and executes commands by user
-func (this *Server) applyServerCommand(command string, writer *bufio.Writer) (printStatusRule PrintStatusRule, err error) {
-	tokens := strings.SplitN(command, "=", 2)
-	command = strings.TrimSpace(tokens[0])
-	arg := ""
-	if len(tokens) > 1 {
-		arg = strings.TrimSpace(tokens[1])
-		if unquoted, err := strconv.Unquote(arg); err == nil {
-			arg = unquoted
-		}
-	}
-	argIsQuestion := (arg == "?")
-	throttleHint := "# Note: you may only throttle for as long as your binary logs are not purged"
+type ValueType string
 
-	if err := this.hooksExecutor.onInteractiveCommand(command); err != nil {
-		return NoPrintStatusRule, err
-	}
+var (
+	StringValue  ValueType = "string"
+	Int64Value   ValueType = "int"
+	Float64Value ValueType = "float"
+)
 
-	switch command {
-	case "help":
-		{
-			fmt.Fprint(writer, `available commands:
-status                               # Print a detailed status message
-sup                                  # Print a short status message
-coordinates                          # Print the currently inspected coordinates
-applier                              # Print the hostname of the applier
-inspector                            # Print the hostname of the inspector
-chunk-size=<newsize>                 # Set a new chunk-size
-dml-batch-size=<newsize>             # Set a new dml-batch-size
-nice-ratio=<ratio>                   # Set a new nice-ratio, immediate sleep after each row-copy operation, float (examples: 0 is aggressive, 0.7 adds 70% runtime, 1.0 doubles runtime, 2.0 triples runtime, ...)
-critical-load=<load>                 # Set a new set of max-load thresholds
-max-lag-millis=<max-lag>             # Set a new replication lag threshold
-replication-lag-query=<query>        # Set a new query that determines replication lag (no quotes)
-max-load=<load>                      # Set a new set of max-load thresholds
-throttle-query=<query>               # Set a new throttle-query (no quotes)
-throttle-http=<URL>                  # Set a new throttle URL
-throttle-control-replicas=<replicas> # Set a new comma delimited list of throttle control replicas
-throttle                             # Force throttling
-no-throttle                          # End forced throttling (other throttling may still apply)
-unpostpone                           # Bail out a cut-over postpone; proceed to cut-over
-panic                                # panic and quit without cleanup
-help                                 # This message
-- use '?' (question mark) as argument to get info rather than set. e.g. "max-load=?" will just print out current max-load.
-`)
-		}
-	case "sup":
-		return ForcePrintStatusOnlyRule, nil
-	case "info", "status":
-		return ForcePrintStatusAndHintRule, nil
-	case "coordinates":
-		{
-			if argIsQuestion || arg == "" {
-				fmt.Fprintf(writer, "%+v\n", this.migrationContext.GetRecentBinlogCoordinates())
-				return NoPrintStatusRule, nil
+// ServerCommand represents a server command/action
+type ServerCommand struct {
+	Name      string
+	Aliases   []string
+	Help      string
+	ValueType ValueType
+	ValueHelp string
+	Action    func(writer io.Writer, this *Server, arg string) (PrintStatusRule, error)
+}
+
+func isArgQuestion(arg string) bool {
+	return (arg == "?")
+}
+
+// ServerCommands represents all available server commands
+var ServerCommands = []ServerCommand{
+	{
+		Name: "help",
+		Help: "Print this message",
+	},
+	{
+		Name: "sup",
+		Help: "Print a short status message",
+		Action: func(writer io.Writer, this *Server, arg string) (PrintStatusRule, error) {
+			return ForcePrintStatusOnlyRule, nil
+		},
+	},
+	{
+		Name: "version",
+		Help: "Print the gh-ost version",
+		Action: func(writer io.Writer, this *Server, arg string) (PrintStatusRule, error) {
+			fmt.Fprintf(writer, "gh-ost version: %s\n", this.appVersion)
+			return ForcePrintStatusAndHintRule, nil
+		},
+	},
+	{
+		Name:    "status",
+		Aliases: []string{"info"},
+		Help:    "Print a detailed status message",
+		Action: func(writer io.Writer, this *Server, arg string) (PrintStatusRule, error) {
+			return ForcePrintStatusAndHintRule, nil
+		},
+	},
+	{
+		Name: "coordinates",
+		Help: "Print the currently inspected coordinates",
+		Action: func(writer io.Writer, this *Server, arg string) (PrintStatusRule, error) {
+			fmt.Fprintf(writer, "%+v\n", this.migrationContext.GetRecentBinlogCoordinates())
+			return NoPrintStatusRule, nil
+		},
+	},
+	{
+		Name: "applier",
+		Help: "Print the hostname of the applier",
+		Action: func(writer io.Writer, this *Server, arg string) (PrintStatusRule, error) {
+			if this.migrationContext.ApplierConnectionConfig != nil && this.migrationContext.ApplierConnectionConfig.ImpliedKey != nil {
+				fmt.Fprintf(writer, "Host: %s, Version: %s\n",
+					this.migrationContext.ApplierConnectionConfig.ImpliedKey.String(),
+					this.migrationContext.ApplierMySQLVersion,
+				)
 			}
-			return NoPrintStatusRule, fmt.Errorf("coordinates are read-only")
-		}
-	case "applier":
-		if this.migrationContext.ApplierConnectionConfig != nil && this.migrationContext.ApplierConnectionConfig.ImpliedKey != nil {
-			fmt.Fprintf(writer, "Host: %s, Version: %s\n",
-				this.migrationContext.ApplierConnectionConfig.ImpliedKey.String(),
-				this.migrationContext.ApplierMySQLVersion,
-			)
-		}
-		return NoPrintStatusRule, nil
-	case "inspector":
-		if this.migrationContext.InspectorConnectionConfig != nil && this.migrationContext.InspectorConnectionConfig.ImpliedKey != nil {
-			fmt.Fprintf(writer, "Host: %s, Version: %s\n",
-				this.migrationContext.InspectorConnectionConfig.ImpliedKey.String(),
-				this.migrationContext.InspectorMySQLVersion,
-			)
-		}
-		return NoPrintStatusRule, nil
-	case "chunk-size":
-		{
-			if argIsQuestion {
+			return NoPrintStatusRule, nil
+		},
+	},
+	{
+		Name: "inspector",
+		Help: "Print the hostname of the inspector",
+		Action: func(writer io.Writer, this *Server, arg string) (PrintStatusRule, error) {
+			if this.migrationContext.InspectorConnectionConfig != nil && this.migrationContext.InspectorConnectionConfig.ImpliedKey != nil {
+				fmt.Fprintf(writer, "Host: %s, Version: %s\n",
+					this.migrationContext.InspectorConnectionConfig.ImpliedKey.String(),
+					this.migrationContext.InspectorMySQLVersion,
+				)
+			}
+			return NoPrintStatusRule, nil
+		},
+	},
+	{
+		Name:      "chunk-size",
+		Help:      "Set a new chunk-size",
+		ValueType: Int64Value,
+		ValueHelp: "newsize",
+		Action: func(writer io.Writer, this *Server, arg string) (PrintStatusRule, error) {
+			if isArgQuestion(arg) {
 				fmt.Fprintf(writer, "%+v\n", atomic.LoadInt64(&this.migrationContext.ChunkSize))
 				return NoPrintStatusRule, nil
 			}
-			if chunkSize, err := strconv.Atoi(arg); err != nil {
+			if chunkSize, err := strconv.ParseInt(arg, 10, 64); err != nil {
 				return NoPrintStatusRule, err
 			} else {
-				this.migrationContext.SetChunkSize(int64(chunkSize))
+				this.migrationContext.SetChunkSize(chunkSize)
 				return ForcePrintStatusAndHintRule, nil
 			}
-		}
-	case "dml-batch-size":
-		{
-			if argIsQuestion {
+		},
+	},
+	{
+		Name:      "dml-batch-size",
+		Help:      "Set a new dml-batch-size",
+		ValueType: Int64Value,
+		ValueHelp: "newsize",
+		Action: func(writer io.Writer, this *Server, arg string) (PrintStatusRule, error) {
+			if isArgQuestion(arg) {
 				fmt.Fprintf(writer, "%+v\n", atomic.LoadInt64(&this.migrationContext.DMLBatchSize))
 				return NoPrintStatusRule, nil
 			}
-			if dmlBatchSize, err := strconv.Atoi(arg); err != nil {
+			if dmlBatchSize, err := strconv.ParseInt(arg, 10, 64); err != nil {
 				return NoPrintStatusRule, err
 			} else {
-				this.migrationContext.SetDMLBatchSize(int64(dmlBatchSize))
+				this.migrationContext.SetDMLBatchSize(dmlBatchSize)
 				return ForcePrintStatusAndHintRule, nil
 			}
-		}
-	case "max-lag-millis":
-		{
-			if argIsQuestion {
+		},
+	},
+	{
+		Name:      "max-lag-millis",
+		Help:      "Set a new replication lag threshold",
+		ValueType: Int64Value,
+		ValueHelp: "max-lag",
+		Action: func(writer io.Writer, this *Server, arg string) (PrintStatusRule, error) {
+			if isArgQuestion(arg) {
 				fmt.Fprintf(writer, "%+v\n", atomic.LoadInt64(&this.migrationContext.MaxLagMillisecondsThrottleThreshold))
 				return NoPrintStatusRule, nil
 			}
-			if maxLagMillis, err := strconv.Atoi(arg); err != nil {
+			if maxLagMillis, err := strconv.ParseInt(arg, 10, 64); err != nil {
 				return NoPrintStatusRule, err
 			} else {
-				this.migrationContext.SetMaxLagMillisecondsThrottleThreshold(int64(maxLagMillis))
+				this.migrationContext.SetMaxLagMillisecondsThrottleThreshold(maxLagMillis)
 				return ForcePrintStatusAndHintRule, nil
 			}
-		}
-	case "replication-lag-query":
-		{
+		},
+	},
+	{
+		Name:      "replication-lag-query",
+		Help:      "(Deprecated) set a new query that determines replication lag without quotes",
+		ValueType: StringValue,
+		ValueHelp: "query",
+		Action: func(writer io.Writer, this *Server, arg string) (PrintStatusRule, error) {
 			return NoPrintStatusRule, fmt.Errorf("replication-lag-query is deprecated. gh-ost uses an internal, subsecond resolution query")
-		}
-	case "nice-ratio":
-		{
-			if argIsQuestion {
+		},
+	},
+	{
+		Name:      "nice-ratio",
+		Help:      "Set a new nice-ratio, immediate sleep after each row-copy operation, float (examples: 0 is aggressive, 0.7 adds 70% runtime, 1.0 doubles runtime, 2.0 triples runtime, ...)",
+		ValueType: Float64Value,
+		ValueHelp: "ratio",
+		Action: func(writer io.Writer, this *Server, arg string) (PrintStatusRule, error) {
+			if isArgQuestion(arg) {
 				fmt.Fprintf(writer, "%+v\n", this.migrationContext.GetNiceRatio())
 				return NoPrintStatusRule, nil
 			}
@@ -248,10 +290,15 @@ help                                 # This message
 				this.migrationContext.SetNiceRatio(niceRatio)
 				return ForcePrintStatusAndHintRule, nil
 			}
-		}
-	case "max-load":
-		{
-			if argIsQuestion {
+		},
+	},
+	{
+		Name:      "max-load",
+		Help:      "Set a new set of max-load thresholds",
+		ValueType: StringValue,
+		ValueHelp: "load",
+		Action: func(writer io.Writer, this *Server, arg string) (PrintStatusRule, error) {
+			if isArgQuestion(arg) {
 				maxLoad := this.migrationContext.GetMaxLoad()
 				fmt.Fprintf(writer, "%s\n", maxLoad.String())
 				return NoPrintStatusRule, nil
@@ -260,10 +307,15 @@ help                                 # This message
 				return NoPrintStatusRule, err
 			}
 			return ForcePrintStatusAndHintRule, nil
-		}
-	case "critical-load":
-		{
-			if argIsQuestion {
+		},
+	},
+	{
+		Name:      "critical-load",
+		Help:      "Set a new set of max-load thresholds",
+		ValueType: StringValue,
+		ValueHelp: "load",
+		Action: func(writer io.Writer, this *Server, arg string) (PrintStatusRule, error) {
+			if isArgQuestion(arg) {
 				criticalLoad := this.migrationContext.GetCriticalLoad()
 				fmt.Fprintf(writer, "%s\n", criticalLoad.String())
 				return NoPrintStatusRule, nil
@@ -272,30 +324,45 @@ help                                 # This message
 				return NoPrintStatusRule, err
 			}
 			return ForcePrintStatusAndHintRule, nil
-		}
-	case "throttle-query":
-		{
-			if argIsQuestion {
+		},
+	},
+	{
+		Name:      "throttle-query",
+		Help:      "Set a new throttle-query without quotes",
+		ValueType: StringValue,
+		ValueHelp: "query",
+		Action: func(writer io.Writer, this *Server, arg string) (PrintStatusRule, error) {
+			if isArgQuestion(arg) {
 				fmt.Fprintf(writer, "%+v\n", this.migrationContext.GetThrottleQuery())
 				return NoPrintStatusRule, nil
 			}
 			this.migrationContext.SetThrottleQuery(arg)
 			fmt.Fprintln(writer, throttleHint)
 			return ForcePrintStatusAndHintRule, nil
-		}
-	case "throttle-http":
-		{
-			if argIsQuestion {
+		},
+	},
+	{
+		Name:      "throttle-http",
+		Help:      "Set a new throttle URL",
+		ValueType: StringValue,
+		ValueHelp: "url",
+		Action: func(writer io.Writer, this *Server, arg string) (PrintStatusRule, error) {
+			if isArgQuestion(arg) {
 				fmt.Fprintf(writer, "%+v\n", this.migrationContext.GetThrottleHTTP())
 				return NoPrintStatusRule, nil
 			}
 			this.migrationContext.SetThrottleHTTP(arg)
 			fmt.Fprintln(writer, throttleHint)
 			return ForcePrintStatusAndHintRule, nil
-		}
-	case "throttle-control-replicas":
-		{
-			if argIsQuestion {
+		},
+	},
+	{
+		Name:      "throttle-control-replicas",
+		Help:      "Set a new comma delimited list of throttle control replicas",
+		ValueType: StringValue,
+		ValueHelp: "replicas",
+		Action: func(writer io.Writer, this *Server, arg string) (PrintStatusRule, error) {
+			if isArgQuestion(arg) {
 				fmt.Fprintf(writer, "%s\n", this.migrationContext.GetThrottleControlReplicaKeys().ToCommaDelimitedList())
 				return NoPrintStatusRule, nil
 			}
@@ -304,9 +371,13 @@ help                                 # This message
 			}
 			fmt.Fprintf(writer, "%s\n", this.migrationContext.GetThrottleControlReplicaKeys().ToCommaDelimitedList())
 			return ForcePrintStatusAndHintRule, nil
-		}
-	case "throttle", "pause", "suspend":
-		{
+		},
+	},
+	{
+		Name:    "throttle",
+		Aliases: []string{"pause", "suspend"},
+		Help:    "Force throttle",
+		Action: func(writer io.Writer, this *Server, arg string) (PrintStatusRule, error) {
 			if arg != "" && arg != this.migrationContext.OriginalTableName {
 				// User explicitly provided table name. This is a courtesy protection mechanism
 				err := fmt.Errorf("User commanded 'throttle' on %s, but migrated table is %s; ignoring request.", arg, this.migrationContext.OriginalTableName)
@@ -315,9 +386,13 @@ help                                 # This message
 			atomic.StoreInt64(&this.migrationContext.ThrottleCommandedByUser, 1)
 			fmt.Fprintln(writer, throttleHint)
 			return ForcePrintStatusAndHintRule, nil
-		}
-	case "no-throttle", "unthrottle", "resume", "continue":
-		{
+		},
+	},
+	{
+		Name:    "no-throttle",
+		Aliases: []string{"unthrottle", "resume", "continue"},
+		Help:    "End forced throttling (other throttling may still apply)",
+		Action: func(writer io.Writer, this *Server, arg string) (PrintStatusRule, error) {
 			if arg != "" && arg != this.migrationContext.OriginalTableName {
 				// User explicitly provided table name. This is a courtesy protection mechanism
 				err := fmt.Errorf("User commanded 'no-throttle' on %s, but migrated table is %s; ignoring request.", arg, this.migrationContext.OriginalTableName)
@@ -325,9 +400,13 @@ help                                 # This message
 			}
 			atomic.StoreInt64(&this.migrationContext.ThrottleCommandedByUser, 0)
 			return ForcePrintStatusAndHintRule, nil
-		}
-	case "unpostpone", "no-postpone", "cut-over":
-		{
+		},
+	},
+	{
+		Name:    "unpostpone",
+		Aliases: []string{"no-postpone", "cut-over"},
+		Help:    "Bail out a cut-over postpone; proceed to cut-over",
+		Action: func(writer io.Writer, this *Server, arg string) (PrintStatusRule, error) {
 			if arg == "" && this.migrationContext.ForceNamedCutOverCommand {
 				err := fmt.Errorf("User commanded 'unpostpone' without specifying table name, but --force-named-cut-over is set")
 				return NoPrintStatusRule, err
@@ -344,9 +423,12 @@ help                                 # This message
 			}
 			fmt.Fprintf(writer, "You may only invoke this when gh-ost is actively postponing migration. At this time it is not.\n")
 			return NoPrintStatusRule, nil
-		}
-	case "panic":
-		{
+		},
+	},
+	{
+		Name: "panic",
+		Help: "Panic and quit without cleanup",
+		Action: func(writer io.Writer, this *Server, arg string) (PrintStatusRule, error) {
 			if arg == "" && this.migrationContext.ForceNamedPanicCommand {
 				err := fmt.Errorf("User commanded 'panic' without specifying table name, but --force-named-panic is set")
 				return NoPrintStatusRule, err
@@ -359,10 +441,82 @@ help                                 # This message
 			err := fmt.Errorf("User commanded 'panic'. The migration will be aborted without cleanup. Please drop the gh-ost tables before trying again.")
 			this.migrationContext.PanicAbort <- err
 			return NoPrintStatusRule, err
+		},
+	},
+}
+
+func GetServerCommandOrAlias(commandOrAlias string) (*ServerCommand, error) {
+	for _, cmd := range ServerCommands {
+		if cmd.Name == commandOrAlias {
+			return &cmd, nil
+		} else {
+			for _, alias := range cmd.Aliases {
+				if alias == commandOrAlias {
+					return &cmd, nil
+				}
+			}
 		}
-	default:
-		err = fmt.Errorf("Unknown command: %s", command)
+	}
+	return nil, fmt.Errorf("Unknown command: %s", commandOrAlias)
+}
+
+func handleServerHelp(writer io.Writer) (PrintStatusRule, error) {
+	sort.SliceStable(ServerCommands, func(i, j int) bool {
+		return ServerCommands[i].Name < ServerCommands[j].Name
+	})
+
+	tabWriter := tabwriter.NewWriter(writer, 0, 8, 1, ' ', 0)
+	for _, cmd := range ServerCommands {
+		cmdNames := []string{cmd.Name}
+		if len(cmd.Aliases) > 0 {
+			sort.Strings(cmd.Aliases)
+			cmdNames = append(cmdNames, cmd.Aliases...)
+		}
+		if cmd.ValueHelp != "" {
+			fmt.Fprintf(tabWriter, "%s=<%s>\t# %s (%s)\n", strings.Join(cmdNames, ","), cmd.ValueHelp, cmd.Help, cmd.ValueType)
+		} else {
+			fmt.Fprintf(tabWriter, "%s\t# %s\n", strings.Join(cmdNames, ","), cmd.Help)
+		}
+	}
+	if err := tabWriter.Flush(); err != nil {
 		return NoPrintStatusRule, err
 	}
+	_, err := fmt.Fprintln(writer, `- use '?' (question mark) as argument to get info rather than set. e.g. "max-load=?" will just print out current max-load.`)
+
+	return NoPrintStatusRule, err
+}
+
+// applyServerCommand parses and executes commands by user
+func (this *Server) applyServerCommand(command string, writer io.Writer) (printStatusRule PrintStatusRule, err error) {
+	printStatusRule = NoPrintStatusRule
+
+	tokens := strings.SplitN(command, "=", 2)
+	command = strings.TrimSpace(tokens[0])
+	arg := ""
+	if len(tokens) > 1 {
+		arg = strings.TrimSpace(tokens[1])
+		if unquoted, err := strconv.Unquote(arg); err == nil {
+			arg = unquoted
+		}
+	}
+
+	if err := this.hooksExecutor.onInteractiveCommand(command); err != nil {
+		return NoPrintStatusRule, err
+	}
+
+	switch command {
+	case "help":
+		return handleServerHelp(writer)
+	default:
+		cmd, err := GetServerCommandOrAlias(command)
+		if err != nil {
+			return NoPrintStatusRule, err
+		}
+
+		if cmd.Action != nil {
+			return cmd.Action(writer, this, arg)
+		}
+	}
+
 	return NoPrintStatusRule, nil
 }

@@ -49,9 +49,13 @@ const (
 )
 
 const (
-	HTTPStatusOK       = 200
-	MaxEventsBatchSize = 1000
-	ETAUnknown         = math.MinInt64
+	DefaultChunkSize                           int64 = 1000
+	DefaultCutOverLockTimeoutSeconds           int64 = 10
+	DefaultDMLBatchSize                        int64 = 10
+	DefaultMaxLagMillisecondsThrottleThreshold int64 = 1500
+	DefaultNumRetries                          int64 = 60
+	ETAUnknown                                       = math.MinInt64
+	MaxEventsBatchSize                         int64 = 1000
 )
 
 var (
@@ -267,13 +271,13 @@ type ContextConfig struct {
 func NewMigrationContext() *MigrationContext {
 	return &MigrationContext{
 		Uuid:                                uuid.NewV4().String(),
-		defaultNumRetries:                   60,
-		ChunkSize:                           1000,
+		defaultNumRetries:                   DefaultNumRetries,
+		ChunkSize:                           DefaultChunkSize,
 		InspectorConnectionConfig:           mysql.NewConnectionConfig(),
 		ApplierConnectionConfig:             mysql.NewConnectionConfig(),
-		MaxLagMillisecondsThrottleThreshold: 1500,
-		CutOverLockTimeoutSeconds:           3,
-		DMLBatchSize:                        10,
+		MaxLagMillisecondsThrottleThreshold: DefaultMaxLagMillisecondsThrottleThreshold,
+		CutOverLockTimeoutSeconds:           DefaultCutOverLockTimeoutSeconds,
+		DMLBatchSize:                        DefaultDMLBatchSize,
 		etaNanoseonds:                       ETAUnknown,
 		maxLoad:                             NewLoadMap(),
 		criticalLoad:                        NewLoadMap(),
