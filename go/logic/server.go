@@ -130,7 +130,7 @@ type ValueType string
 
 var (
 	StringValue  ValueType = "string"
-	Int64Value   ValueType = "int"
+	Int64Value   ValueType = "integer"
 	Float64Value ValueType = "float"
 )
 

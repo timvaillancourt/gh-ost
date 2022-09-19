@@ -15,23 +15,23 @@ import (
 	"github.com/github/gh-ost/go/mysql"
 )
 
-func TestBuildClientCommand(t *testing.T) {
+func TestBuildCommand(t *testing.T) {
 	{
-		_, err := buildClientCommand("doesnt-exist", nil)
+		_, err := buildCommand("doesnt-exist", nil)
 		test.S(t).ExpectNotNil(err)
 	}
 	{
-		cmd, err := buildClientCommand("help", nil)
+		cmd, err := buildCommand("help", nil)
 		test.S(t).ExpectNil(err)
 		test.S(t).ExpectEquals(cmd, "help")
 	}
 	{
-		cmd, err := buildClientCommand("max-load", nil)
+		cmd, err := buildCommand("max-load", nil)
 		test.S(t).ExpectNil(err)
 		test.S(t).ExpectEquals(cmd, "max-load=?")
 	}
 	{
-		cmd, err := buildClientCommand("max-load", "threads_running=20")
+		cmd, err := buildCommand("max-load", "threads_running=20")
 		test.S(t).ExpectNil(err)
 		test.S(t).ExpectEquals(cmd, "max-load=threads_running=20")
 	}
@@ -90,13 +90,13 @@ func TestServerWithClient(t *testing.T) {
 		test.S(t).ExpectNil(err)
 
 		expected := `applier                                # Print the hostname of the applier
-chunk-size=<newsize>                   # Set a new chunk-size (int)
+chunk-size=<newsize>                   # Set a new chunk-size (integer)
 coordinates                            # Print the currently inspected coordinates
 critical-load=<load>                   # Set a new set of max-load thresholds (string)
-dml-batch-size=<newsize>               # Set a new dml-batch-size (int)
+dml-batch-size=<newsize>               # Set a new dml-batch-size (integer)
 help                                   # Print this message
 inspector                              # Print the hostname of the inspector
-max-lag-millis=<max-lag>               # Set a new replication lag threshold (int)
+max-lag-millis=<max-lag>               # Set a new replication lag threshold (integer)
 max-load=<load>                        # Set a new set of max-load thresholds (string)
 nice-ratio=<ratio>                     # Set a new nice-ratio, immediate sleep after each row-copy operation, float (examples: 0 is aggressive, 0.7 adds 70% runtime, 1.0 doubles runtime, 2.0 triples runtime, ...) (float)
 no-throttle,continue,resume,unthrottle # End forced throttling (other throttling may still apply)
