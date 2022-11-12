@@ -8,7 +8,6 @@ package logic
 import (
 	"context"
 	gosql "database/sql"
-	"errors"
 	"fmt"
 	"strings"
 	"sync"
@@ -60,9 +59,9 @@ func newDmlBuildResultError(err error) *dmlBuildResult {
 type Applier struct {
 	connectionConfig  *mysql.ConnectionConfig
 	db                *gosql.DB
+	dbSemiSyncConfig  *mysql.SemiSyncConfig
 	singletonDB       *gosql.DB
 	migrationContext  *base.MigrationContext
-	writeTimeout      time.Duration
 	finishedMigrating int64
 	name              string
 }
@@ -76,30 +75,22 @@ func NewApplier(migrationContext *base.MigrationContext) *Applier {
 	}
 }
 
-func (this *Applier) getDBWriteTimeout() (timeout time.Duration, err error) {
-	if this.migrationContext.UseSemiSyncTimeout {
-		return timeout, nil
-	}
-	var timeoutMillis float64
-	var enabled, waitNoSlave string
+func (this *Applier) getSemiSyncConfig() (cfg *mysql.SemiSyncConfig, err error) {
+	var masterTimeoutMillis float64
 	query := `select @@global.rpl_semi_sync_master_enabled,
 		@@global.rpl_semi_sync_master_timeout,
 		@@global.rpl_semi_sync_master_wait_no_slave`
-	if err = this.db.QueryRow(query).Scan(&enabled, &timeoutMillis, &waitNoSlave); err != nil {
-		return timeout, err
-	}
-	if enabled != "ON" {
-		return timeout, errors.New("--semi-sync-timeout set but 'rpl_semi_sync_master_enabled' is 'OFF' on the applier")
-	}
-	if waitNoSlave != "ON" {
-		return timeout, errors.New("--semi-sync-timeout set but 'rpl_semi_sync_master_wait_no_slave' is 'OFF' on the applier. This configuration is unsupported")
-	}
-	timeoutMillis = timeoutMillis * this.migrationContext.SemiSyncTimeoutRatio
-	return time.Duration(timeoutMillis) * time.Millisecond, nil
+	err = this.db.QueryRow(query).Scan(&cfg.MasterEnabled, &masterTimeoutMillis, &cfg.MasterWaitNoSlave)
+	cfg.Timeout = time.Duration(masterTimeoutMillis) * time.Millisecond
+	return &cfg, err
 }
 
 func (this *Applier) getWriteTimeoutContext() (context.Context, context.CancelFunc) {
-	return context.WithTimeout(context.Background(), this.writeTimeout)
+	if !this.dbSemiSyncConfig.MasterEnabled {
+		return context.Background(), func() {}
+	}
+	timeout := this.dbSemiSyncConfig.MasterTimeout
+	return context.WithTimeout(context.Background(), timeout)
 }
 
 func (this *Applier) InitDBConnections() (err error) {
@@ -107,7 +98,7 @@ func (this *Applier) InitDBConnections() (err error) {
 	if this.db, _, err = mysql.GetDB(this.migrationContext.Uuid, applierUri); err != nil {
 		return err
 	}
-	if this.writeTimeout, err = this.getDBWriteTimeout(); err != nil {
+	if this.dbSemiSyncConfig, err = this.getSemiSyncConfig(); err != nil {
 		return err
 	}
 	singletonApplierUri := fmt.Sprintf("%s&timeout=0", applierUri)
@@ -653,8 +644,9 @@ func (this *Applier) ApplyIterationInsertQuery() (chunkSize int64, rowsAffected 
 			return nil, err
 		}
 
-		ctx, cancel := this.getWriteTimeoutContext()
+		ctx, cancel := context.WithTimeout(context.Background(), this.writeTimeout)
 		defer cancel()
+
 		result, err := tx.ExecContext(ctx, query, explodedArgs...)
 		if err != nil {
 			return nil, err
