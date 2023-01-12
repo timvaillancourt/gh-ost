@@ -15,6 +15,7 @@ import (
 
 	"github.com/github/gh-ost/go/base"
 	"github.com/github/gh-ost/go/logic"
+	"github.com/github/gh-ost/go/metrics"
 	"github.com/github/gh-ost/go/sql"
 	_ "github.com/go-sql-driver/mysql"
 	"github.com/openark/golib/log"
@@ -63,6 +64,10 @@ func main() {
 	flag.StringVar(&migrationContext.TLSCertificate, "ssl-cert", "", "Certificate in PEM format for TLS connections to MySQL hosts. Requires --ssl")
 	flag.StringVar(&migrationContext.TLSKey, "ssl-key", "", "Key in PEM format for TLS connections to MySQL hosts. Requires --ssl")
 	flag.BoolVar(&migrationContext.TLSAllowInsecure, "ssl-allow-insecure", false, "Skips verification of MySQL hosts' certificate chain and host name. Requires --ssl")
+
+	flag.StringVar(&migrationContext.MetricsHandlers, "metrics-handlers", "", "A comma-separated list of metrics handlers. Set to 'pushgateway' to push metrics to a Prometheus Pushgateway")
+	flag.StringVar(&migrationContext.PushgatewayAddress, "metrics-pushgateway-address", "", "Address of a Prometheus Pushgateway to push metrics to. Requires --metrics-handlers to include 'pushgateway'")
+	flag.StringVar(&migrationContext.PushgatewayJobName, "metrics-pushgateway-job", "gh-ost", "The Prometheus Pushgateway job name to push metrics to.")
 
 	flag.StringVar(&migrationContext.DatabaseName, "database", "", "database name (mandatory)")
 	flag.StringVar(&migrationContext.OriginalTableName, "table", "", "table name (mandatory)")
@@ -309,6 +314,7 @@ func main() {
 
 	log.Infof("starting gh-ost %+v", AppVersion)
 	acceptSignals(migrationContext)
+	metrics.RegisterHandlers(migrationContext)
 
 	migrator := logic.NewMigrator(migrationContext, AppVersion)
 	if err := migrator.Migrate(); err != nil {

@@ -161,6 +161,10 @@ type MigrationContext struct {
 	CutOverType                  CutOver
 	ReplicaServerId              uint
 
+	MetricsHandlers    string
+	PushgatewayAddress string
+	PushgatewayJobName string
+
 	Hostname                               string
 	AssumeMasterHostname                   string
 	ApplierTimeZone                        string

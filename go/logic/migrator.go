@@ -19,6 +19,7 @@ import (
 
 	"github.com/github/gh-ost/go/base"
 	"github.com/github/gh-ost/go/binlog"
+	"github.com/github/gh-ost/go/metrics"
 	"github.com/github/gh-ost/go/mysql"
 	"github.com/github/gh-ost/go/sql"
 )
@@ -1218,6 +1219,7 @@ func (this *Migrator) iterateChunks() error {
 				}
 				atomic.AddInt64(&this.migrationContext.TotalRowsCopied, rowsAffected)
 				atomic.AddInt64(&this.migrationContext.Iteration, 1)
+				metrics.IncrRowsCopied()
 				return nil
 			}
 			if err := this.retryOperation(applyCopyRowsFunc); err != nil {
