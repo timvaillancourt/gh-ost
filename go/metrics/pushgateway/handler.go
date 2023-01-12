@@ -1,4 +1,4 @@
-package metrics
+package pushgateway
 
 import (
 	"context"
@@ -12,36 +12,38 @@ import (
 )
 
 var (
-	pushgatewayPromNamespace  = "gh-ost"
-	pushgatewayRowsCopiedOpts = prometheus.CounterOpts{
-		Namespace: pushgatewayPromNamespace,
+	promNamespace  = "gh-ost"
+	rowsCopiedOpts = prometheus.CounterOpts{
+		Namespace: promNamespace,
 		Name:      "rows_copied_total",
 		Help:      "The total number of rows copied by the migration",
 	}
 )
 
-type PushgatewayHandler struct {
+type Handler struct {
 	counters         map[string]prometheus.Counter
 	migrationContext *base.MigrationContext
 	pusher           *prompush.Pusher
+	stop             chan bool
 }
 
-func NewPushgatewayHandler(migrationContext *base.MigrationContext) *PushgatewayHandler {
-	h := &PushgatewayHandler{
+func NewHandler(migrationContext *base.MigrationContext) *Handler {
+	h := &Handler{
 		migrationContext: migrationContext,
 		counters: map[string]prometheus.Counter{
-			pushgatewayRowsCopiedOpts.Name: prometheus.NewCounter(pushgatewayRowsCopiedOpts),
+			rowsCopiedOpts.Name: prometheus.NewCounter(rowsCopiedOpts),
 		},
 		pusher: prompush.New(
 			migrationContext.PushgatewayAddress,
 			migrationContext.PushgatewayJobName,
 		),
+		stop: make(chan bool, 1),
 	}
 	go h.startPusher()
 	return h
 }
 
-func (h *PushgatewayHandler) push(collector prometheus.Collector) error {
+func (h *Handler) push(collector prometheus.Collector) error {
 	ctx, cancel := context.WithTimeout(context.Background(), time.Second) // TODO: add flag
 	defer cancel()
 	return h.pusher.Collector(collector).
@@ -51,10 +53,14 @@ func (h *PushgatewayHandler) push(collector prometheus.Collector) error {
 		PushContext(ctx)
 }
 
-func (h *PushgatewayHandler) startPusher() {
+func (h *Handler) startPusher() {
+	log.Printf("Started Prometheus Pushgateway metrics pusher")
 	ticker := time.NewTicker(time.Second * 5) // TODO: add flag
 	for {
 		select {
+		case <-h.stop:
+			log.Printf("Stopping Prometheus Pushgateway metrics pusher")
+			return
 		case <-ticker.C:
 			for _, counter := range h.counters {
 				if err := h.push(counter); err != nil {
@@ -66,26 +72,30 @@ func (h *PushgatewayHandler) startPusher() {
 	}
 }
 
-func (h *PushgatewayHandler) Name() string {
+func (h *Handler) Close() {
+	h.stop <- true
+}
+
+func (h *Handler) Name() string {
 	return "pushgateway"
 }
 
-func (h *PushgatewayHandler) IncrBinlogsApplied() {
+func (h *Handler) AddBinlogsApplied(delta int64) {
 	// TODO: send metrics
 }
 
-func (h *PushgatewayHandler) IncrBinlogsRead() {
+func (h *Handler) AddBinlogsRead(delta int64) {
 	// TODO: send metrics
 }
 
-func (h *PushgatewayHandler) IncrRowsCopied() {
-	h.counters[pushgatewayRowsCopiedOpts.Name].Inc()
+func (h *Handler) AddRowsCopied(delta int64) {
+	h.counters[rowsCopiedOpts.Name].Add(float64(delta))
 }
 
-func (h *PushgatewayHandler) SetETAMilliseconds(millis int64) {
+func (h *Handler) SetETAMilliseconds(millis int64) {
 	// TODO: send metrics
 }
 
-func (h *PushgatewayHandler) SetTotalRows(rows int64) {
+func (h *Handler) SetTotalRows(rows int64) {
 	// TODO: send metrics
 }

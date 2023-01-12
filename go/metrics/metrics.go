@@ -1,61 +1,42 @@
 package metrics
 
-import (
-	"fmt"
-	"strings"
-
-	"github.com/github/gh-ost/go/base"
-)
-
-var handlers []MetricsHandler
-
-func init() {
-	handlers = make([]MetricsHandler, 0)
-}
-
-type MetricsHandler interface {
-	IncrBinlogsApplied()
-	IncrBinlogsRead()
-	IncrRowsCopied()
+type Handler interface {
+	Close()
+	AddBinlogsApplied(delta int64)
+	AddBinlogsRead(delta int64)
+	AddRowsCopied(delta int64)
 	SetETAMilliseconds(millis int64)
 	SetTotalRows(rows int64)
 }
 
-func RegisterHandlers(migrationContext *base.MigrationContext) error {
-	metricsHandlers := strings.TrimSpace(migrationContext.MetricsHandlers)
-	for _, handlerType := range strings.Split(metricsHandlers, ",") {
-		switch handlerType {
-		case "pushgateway":
-			handlers = append(handlers, NewPushgatewayHandler(migrationContext))
-		default:
-			return fmt.Errorf("unsupported metrics handler: %+v", handlerType)
-		}
-	}
-	return nil
-}
+type Handlers []Handler
 
-func doAllHandlers(f func(h MetricsHandler)) {
-	for _, handler := range handlers {
+func (hs Handlers) doAll(f func(h Handler)) {
+	for _, handler := range hs {
 		f(handler)
 	}
 }
 
-func IncrBinlogsApplied() {
-	doAllHandlers(func(h MetricsHandler) { h.IncrBinlogsApplied() })
+func (hs Handlers) Close() {
+	hs.doAll(func(h Handler) { h.Close() })
 }
 
-func IncrBinlogsRead() {
-	doAllHandlers(func(h MetricsHandler) { h.IncrBinlogsRead() })
+func (hs Handlers) AddBinlogsApplied(delta int64) {
+	hs.doAll(func(h Handler) { h.AddBinlogsApplied(delta) })
 }
 
-func IncrRowsCopied() {
-	doAllHandlers(func(h MetricsHandler) { h.IncrRowsCopied() })
+func (hs Handlers) AddBinlogsRead(delta int64) {
+	hs.doAll(func(h Handler) { h.AddBinlogsRead(delta) })
 }
 
-func SetETAMilliseconds(millis int64) {
-	doAllHandlers(func(h MetricsHandler) { h.SetETAMilliseconds(millis) })
+func (hs Handlers) AddRowsCopied(delta int64) {
+	hs.doAll(func(h Handler) { h.AddRowsCopied(delta) })
 }
 
-func SetTotalRows(rows int64) {
-	doAllHandlers(func(h MetricsHandler) { h.SetTotalRows(rows) })
+func (hs Handlers) SetETAMilliseconds(millis int64) {
+	hs.doAll(func(h Handler) { h.SetETAMilliseconds(millis) })
+}
+
+func (hs Handlers) SetTotalRows(rows int64) {
+	hs.doAll(func(h Handler) { h.SetTotalRows(rows) })
 }

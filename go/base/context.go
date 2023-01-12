@@ -17,6 +17,7 @@ import (
 
 	uuid "github.com/satori/go.uuid"
 
+	"github.com/github/gh-ost/go/metrics"
 	"github.com/github/gh-ost/go/mysql"
 	"github.com/github/gh-ost/go/sql"
 	"github.com/openark/golib/log"
@@ -161,9 +162,10 @@ type MigrationContext struct {
 	CutOverType                  CutOver
 	ReplicaServerId              uint
 
-	MetricsHandlers    string
-	PushgatewayAddress string
-	PushgatewayJobName string
+	Metrics             metrics.Handlers
+	MetricsHandlerNames string
+	PushgatewayAddress  string
+	PushgatewayJobName  string
 
 	Hostname                               string
 	AssumeMasterHostname                   string
@@ -556,6 +558,12 @@ func (this *MigrationContext) GetETASeconds() int64 {
 // This is not exactly the same as the rows being iterated via chunks, but potentially close enough
 func (this *MigrationContext) GetTotalRowsCopied() int64 {
 	return atomic.LoadInt64(&this.TotalRowsCopied)
+}
+
+// AddTotalRowsCopied atomically sets the total rows copied
+func (this *MigrationContext) AddTotalRowsCopied(delta int64) {
+	atomic.AddInt64(&this.TotalRowsCopied, delta)
+	this.Metrics.AddRowsCopied(delta)
 }
 
 func (this *MigrationContext) GetIteration() int64 {

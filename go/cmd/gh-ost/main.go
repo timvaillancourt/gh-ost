@@ -11,11 +11,12 @@ import (
 	"net/url"
 	"os"
 	"os/signal"
+	"strings"
 	"syscall"
 
 	"github.com/github/gh-ost/go/base"
 	"github.com/github/gh-ost/go/logic"
-	"github.com/github/gh-ost/go/metrics"
+	"github.com/github/gh-ost/go/metrics/pushgateway"
 	"github.com/github/gh-ost/go/sql"
 	_ "github.com/go-sql-driver/mysql"
 	"github.com/openark/golib/log"
@@ -45,6 +46,22 @@ func acceptSignals(migrationContext *base.MigrationContext) {
 	}()
 }
 
+func initMetricsHandlers(migrationContext *base.MigrationContext) error {
+	metricsHandlerNames := strings.TrimSpace(migrationContext.MetricsHandlerNames)
+	for _, name := range strings.Split(metricsHandlerNames, ",") {
+		switch name {
+		case "pushgateway":
+			migrationContext.Metrics = append(
+				migrationContext.Metrics,
+				pushgateway.NewHandler(migrationContext),
+			)
+		default:
+			return fmt.Errorf("unsupported metrics handler: %+v", name)
+		}
+	}
+	return nil
+}
+
 // main is the application's entry point. It will either spawn a CLI or HTTP interfaces.
 func main() {
 	migrationContext := base.NewMigrationContext()
@@ -65,7 +82,7 @@ func main() {
 	flag.StringVar(&migrationContext.TLSKey, "ssl-key", "", "Key in PEM format for TLS connections to MySQL hosts. Requires --ssl")
 	flag.BoolVar(&migrationContext.TLSAllowInsecure, "ssl-allow-insecure", false, "Skips verification of MySQL hosts' certificate chain and host name. Requires --ssl")
 
-	flag.StringVar(&migrationContext.MetricsHandlers, "metrics-handlers", "", "A comma-separated list of metrics handlers. Set to 'pushgateway' to push metrics to a Prometheus Pushgateway")
+	flag.StringVar(&migrationContext.MetricsHandlerNames, "metrics-handlers", "", "A comma-separated list of metrics handlers. Set to 'pushgateway' to push metrics to a Prometheus Pushgateway")
 	flag.StringVar(&migrationContext.PushgatewayAddress, "metrics-pushgateway-address", "", "Address of a Prometheus Pushgateway to push metrics to. Requires --metrics-handlers to include 'pushgateway'")
 	flag.StringVar(&migrationContext.PushgatewayJobName, "metrics-pushgateway-job", "gh-ost", "The Prometheus Pushgateway job name to push metrics to.")
 
@@ -314,7 +331,9 @@ func main() {
 
 	log.Infof("starting gh-ost %+v", AppVersion)
 	acceptSignals(migrationContext)
-	metrics.RegisterHandlers(migrationContext)
+
+	initMetricsHandlers(migrationContext)
+	defer migrationContext.Metrics.Close()
 
 	migrator := logic.NewMigrator(migrationContext, AppVersion)
 	if err := migrator.Migrate(); err != nil {
