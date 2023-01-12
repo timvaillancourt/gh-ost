@@ -2,9 +2,10 @@ package pushgateway
 
 import (
 	"context"
-	"log"
+	"fmt"
 	"time"
 
+	"github.com/openark/golib/log"
 	"github.com/prometheus/client_golang/prometheus"
 	prompush "github.com/prometheus/client_golang/prometheus/push"
 
@@ -27,7 +28,11 @@ type Handler struct {
 	stop             chan bool
 }
 
-func NewHandler(migrationContext *base.MigrationContext) *Handler {
+func NewHandler(migrationContext *base.MigrationContext) (*Handler, error) {
+	if migrationContext.PushgatewayAddress == "" {
+		return nil, fmt.Errorf("--metrics-pushgateway-address must be defined")
+	}
+
 	h := &Handler{
 		migrationContext: migrationContext,
 		counters: map[string]prometheus.Counter{
@@ -40,7 +45,8 @@ func NewHandler(migrationContext *base.MigrationContext) *Handler {
 		stop: make(chan bool, 1),
 	}
 	go h.startPusher()
-	return h
+
+	return h, nil
 }
 
 func (h *Handler) push(collector prometheus.Collector) error {
@@ -54,17 +60,17 @@ func (h *Handler) push(collector prometheus.Collector) error {
 }
 
 func (h *Handler) startPusher() {
-	log.Printf("Started Prometheus Pushgateway metrics pusher")
+	log.Info("Started Prometheus Pushgateway metrics pusher")
 	ticker := time.NewTicker(time.Second * 5) // TODO: add flag
 	for {
 		select {
 		case <-h.stop:
-			log.Printf("Stopping Prometheus Pushgateway metrics pusher")
+			log.Info("Stopping Prometheus Pushgateway metrics pusher")
 			return
 		case <-ticker.C:
 			for _, counter := range h.counters {
 				if err := h.push(counter); err != nil {
-					log.Printf("failed to push to Prometheus Pushgateway, skipping push interval: %+v", err)
+					log.Errorf("Failed to push to Prometheus Pushgateway, skipping push interval: %+v", err)
 					return
 				}
 			}

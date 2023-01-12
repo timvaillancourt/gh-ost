@@ -48,15 +48,16 @@ func acceptSignals(migrationContext *base.MigrationContext) {
 
 func initMetricsHandlers(migrationContext *base.MigrationContext) error {
 	metricsHandlerNames := strings.TrimSpace(migrationContext.MetricsHandlerNames)
-	for _, name := range strings.Split(metricsHandlerNames, ",") {
-		switch name {
+	for _, handlerName := range strings.Split(metricsHandlerNames, ",") {
+		switch handlerName {
 		case "pushgateway":
-			migrationContext.Metrics = append(
-				migrationContext.Metrics,
-				pushgateway.NewHandler(migrationContext),
-			)
+			handler, err := pushgateway.NewHandler(migrationContext)
+			if err != nil {
+				return err
+			}
+			migrationContext.Metrics = append(migrationContext.Metrics, handler)
 		default:
-			return fmt.Errorf("unsupported metrics handler: %+v", name)
+			return fmt.Errorf("unsupported metrics handler: %+v", handlerName)
 		}
 	}
 	return nil
