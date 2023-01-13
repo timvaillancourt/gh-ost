@@ -57,6 +57,7 @@ func (h *Handler) push(collector prometheus.Collector) error {
 	defer cancel()
 
 	return h.pusher.Collector(collector).
+		Grouping("instance", h.migrationContext.Hostname).
 		Grouping("uuid", h.migrationContext.Uuid).
 		Grouping("database", h.migrationContext.DatabaseName).
 		Grouping("table", h.migrationContext.OriginalTableName).

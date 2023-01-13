@@ -14,6 +14,7 @@ func TestMetricsPushgatewayHandler(t *testing.T) {
 	}
 
 	migrationContext := base.NewMigrationContext()
+	migrationContext.Hostname = "gh-ost.test.domain"
 	migrationContext.DatabaseName = "test"
 	migrationContext.OriginalTableName = t.Name()
 	migrationContext.PushgatewayAddress = "127.0.0.1:9091"
@@ -23,6 +24,4 @@ func TestMetricsPushgatewayHandler(t *testing.T) {
 	pg, _ := NewHandler(migrationContext)
 	pg.AddRowsCopied(12345)
 	pg.pushCounters()
-	//time.Sleep(time.Second * 2)
-	// test
 }
