@@ -3,6 +3,7 @@ package metrics
 var (
 	dummyBinlogsAppliedKey = "binlogs-applied"
 	dummyBinlogsReadKey    = "binlogs-read"
+	dummyChunkIteration    = "chunk-iteration"
 	dummyRowsCopiedKey     = "rows-copied"
 	dummyETAMilliseconds   = "eta-milliseconds"
 	dummyTotalRowsKey      = "total-rows"
@@ -34,6 +35,10 @@ func (h *DummyHandler) AddBinlogsRead(delta int64) {
 
 func (h *DummyHandler) AddRowsCopied(delta int64) {
 	h.data[dummyRowsCopiedKey] += delta
+}
+
+func (h *DummyHandler) IncrChunkIteration() {
+	h.data[dummyChunkIteration]++
 }
 
 func (h *DummyHandler) SetETAMilliseconds(millis int64) {

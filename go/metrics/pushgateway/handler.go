@@ -14,7 +14,7 @@ import (
 )
 
 var (
-	promNamespace  = "gh-ost"
+	promNamespace  = "gh_ost"
 	rowsCopiedOpts = prometheus.CounterOpts{
 		Namespace: promNamespace,
 		Name:      "rows_copied_total",
@@ -52,8 +52,10 @@ func NewHandler(migrationContext *base.MigrationContext) (*Handler, error) {
 }
 
 func (h *Handler) push(collector prometheus.Collector) error {
-	ctx, cancel := context.WithTimeout(context.Background(), time.Second) // TODO: add flag
+	timeout := time.Duration(h.migrationContext.PushgatewayTimeoutSec) * time.Second
+	ctx, cancel := context.WithTimeout(context.Background(), timeout)
 	defer cancel()
+
 	return h.pusher.Collector(collector).
 		Grouping("uuid", h.migrationContext.Uuid).
 		Grouping("database", h.migrationContext.DatabaseName).
@@ -61,11 +63,25 @@ func (h *Handler) push(collector prometheus.Collector) error {
 		PushContext(ctx)
 }
 
+func (h *Handler) pushCounters() {
+	for _, counter := range h.counters {
+		if err := h.push(counter); err != nil {
+			log.Errorf("Failed to push to Prometheus Pushgateway, skipping push interval: %+v", err)
+			return
+		}
+	}
+}
+
 func (h *Handler) startMetricsPusher() {
+	if h.migrationContext.PushgatewayIntervalSec == 0 {
+		return
+	}
+
 	h.wg.Add(1)
 	log.Info("Started Prometheus Pushgateway metrics pusher")
 
-	ticker := time.NewTicker(time.Second * 5) // TODO: add flag
+	interval := time.Duration(h.migrationContext.PushgatewayIntervalSec) * time.Second
+	ticker := time.NewTicker(interval)
 	defer func() {
 		ticker.Stop()
 		h.wg.Done()
@@ -77,12 +93,7 @@ func (h *Handler) startMetricsPusher() {
 			log.Info("Stopping Prometheus Pushgateway metrics pusher")
 			return
 		case <-ticker.C:
-			for _, counter := range h.counters {
-				if err := h.push(counter); err != nil {
-					log.Errorf("Failed to push to Prometheus Pushgateway, skipping push interval: %+v", err)
-					return
-				}
-			}
+			h.pushCounters()
 		}
 	}
 }
@@ -106,6 +117,10 @@ func (h *Handler) AddBinlogsRead(delta int64) {
 
 func (h *Handler) AddRowsCopied(delta int64) {
 	h.counters[rowsCopiedOpts.Name].Add(float64(delta))
+}
+
+func (h *Handler) IncrChunkIteration() {
+	// TODO: send metrics
 }
 
 func (h *Handler) SetETAMilliseconds(millis int64) {

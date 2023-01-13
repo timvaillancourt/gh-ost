@@ -1217,7 +1217,7 @@ func (this *Migrator) iterateChunks() error {
 					return err // wrapping call will retry
 				}
 				this.migrationContext.AddTotalRowsCopied(rowsAffected)
-				atomic.AddInt64(&this.migrationContext.Iteration, 1)
+				this.migrationContext.IncrIteration()
 				return nil
 			}
 			if err := this.retryOperation(applyCopyRowsFunc); err != nil {

@@ -5,6 +5,7 @@ type Handler interface {
 	AddBinlogsApplied(delta int64)
 	AddBinlogsRead(delta int64)
 	AddRowsCopied(delta int64)
+	IncrChunkIteration()
 	SetETAMilliseconds(millis int64)
 	SetTotalRows(rows int64)
 }
@@ -36,6 +37,11 @@ func (hs Handlers) AddBinlogsRead(delta int64) {
 // AddRowsCopied runs on all handlers
 func (hs Handlers) AddRowsCopied(delta int64) {
 	hs.doAll(func(h Handler) { h.AddRowsCopied(delta) })
+}
+
+// IncrChunkIteration runs on all handlers
+func (hs Handlers) IncrChunkIteration() {
+	hs.doAll(func(h Handler) { h.IncrChunkIteration() })
 }
 
 // SetETAMilliseconds runs on all handlers

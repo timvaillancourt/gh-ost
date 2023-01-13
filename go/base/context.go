@@ -162,10 +162,12 @@ type MigrationContext struct {
 	CutOverType                  CutOver
 	ReplicaServerId              uint
 
-	Metrics             metrics.Handlers
-	MetricsHandlerNames string
-	PushgatewayAddress  string
-	PushgatewayJobName  string
+	Metrics                metrics.Handlers
+	MetricsHandlerNames    string
+	PushgatewayAddress     string
+	PushgatewayJobName     string
+	PushgatewayIntervalSec int64
+	PushgatewayTimeoutSec  int64
 
 	Hostname                               string
 	AssumeMasterHostname                   string
@@ -568,6 +570,11 @@ func (this *MigrationContext) AddTotalRowsCopied(delta int64) {
 
 func (this *MigrationContext) GetIteration() int64 {
 	return atomic.LoadInt64(&this.Iteration)
+}
+
+func (this *MigrationContext) IncrIteration() {
+	atomic.AddInt64(&this.Iteration, 1)
+	this.Metrics.IncrChunkIteration()
 }
 
 func (this *MigrationContext) MarkPointOfInterest() int64 {
