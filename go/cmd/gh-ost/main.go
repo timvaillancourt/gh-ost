@@ -330,11 +330,13 @@ func main() {
 		migrationContext.Log.Errore(err)
 	}
 
+	if err := initMetricsHandlers(migrationContext); err != nil {
+		migrationContext.Log.Errore(err)
+	}
+	defer migrationContext.Metrics.Close()
+
 	log.Infof("starting gh-ost %+v", AppVersion)
 	acceptSignals(migrationContext)
-
-	initMetricsHandlers(migrationContext)
-	defer migrationContext.Metrics.Close()
 
 	migrator := logic.NewMigrator(migrationContext, AppVersion)
 	if err := migrator.Migrate(); err != nil {
