@@ -560,7 +560,7 @@ func (this *MigrationContext) GetTotalRowsCopied() int64 {
 	return atomic.LoadInt64(&this.TotalRowsCopied)
 }
 
-// AddTotalRowsCopied atomically sets the total rows copied
+// AddTotalRowsCopied atomically adds to the total rows copied
 func (this *MigrationContext) AddTotalRowsCopied(delta int64) {
 	atomic.AddInt64(&this.TotalRowsCopied, delta)
 	this.Metrics.AddRowsCopied(delta)

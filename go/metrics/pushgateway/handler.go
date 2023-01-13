@@ -3,6 +3,7 @@ package pushgateway
 import (
 	"context"
 	"fmt"
+	"sync"
 	"time"
 
 	"github.com/openark/golib/log"
@@ -26,6 +27,7 @@ type Handler struct {
 	migrationContext *base.MigrationContext
 	pusher           *prompush.Pusher
 	stop             chan bool
+	wg               sync.WaitGroup
 }
 
 func NewHandler(migrationContext *base.MigrationContext) (*Handler, error) {
@@ -44,7 +46,7 @@ func NewHandler(migrationContext *base.MigrationContext) (*Handler, error) {
 		),
 		stop: make(chan bool, 1),
 	}
-	go h.startPusher()
+	go h.startMetricsPusher()
 
 	return h, nil
 }
@@ -59,9 +61,16 @@ func (h *Handler) push(collector prometheus.Collector) error {
 		PushContext(ctx)
 }
 
-func (h *Handler) startPusher() {
+func (h *Handler) startMetricsPusher() {
+	h.wg.Add(1)
 	log.Info("Started Prometheus Pushgateway metrics pusher")
+
 	ticker := time.NewTicker(time.Second * 5) // TODO: add flag
+	defer func() {
+		ticker.Stop()
+		h.wg.Done()
+	}()
+
 	for {
 		select {
 		case <-h.stop:
@@ -80,6 +89,7 @@ func (h *Handler) startPusher() {
 
 func (h *Handler) Close() {
 	h.stop <- true
+	h.wg.Wait()
 }
 
 func (h *Handler) Name() string {
