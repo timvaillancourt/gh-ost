@@ -85,7 +85,9 @@ func main() {
 
 	flag.StringVar(&migrationContext.MetricsHandlerNames, "metrics-handlers", "", "A comma-separated list of metrics handlers. Set to 'pushgateway' to push metrics to a Prometheus Pushgateway")
 	flag.StringVar(&migrationContext.PushgatewayAddress, "metrics-pushgateway-address", "", "Address of a Prometheus Pushgateway to push metrics to. Requires --metrics-handlers to include 'pushgateway'")
-	flag.StringVar(&migrationContext.PushgatewayJobName, "metrics-pushgateway-job", "gh-ost", "The Prometheus Pushgateway job name to push metrics to.")
+	flag.StringVar(&migrationContext.PushgatewayJobName, "metrics-pushgateway-job", "gh-ost", "The Prometheus Pushgateway job name to push metrics to. Requires --metrics-handlers to include 'pushgateway'")
+	flag.Int64Var(&migrationContext.PushgatewayIntervalSec, "metrics-pushgateway-interval", 5, "The rate in seconds to push local metrics to the Prometheus Pushgateway.")
+	flag.Int64Var(&migrationContext.PushgatewayTimeoutSec, "metrics-pushgateway-timeout", 1, "The timeout in seconds for pushes to Prometheus Pushgateway.")
 
 	flag.StringVar(&migrationContext.DatabaseName, "database", "", "database name (mandatory)")
 	flag.StringVar(&migrationContext.OriginalTableName, "table", "", "table name (mandatory)")

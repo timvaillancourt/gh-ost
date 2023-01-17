@@ -13,17 +13,11 @@ import (
 	"github.com/github/gh-ost/go/base"
 )
 
-var (
-	promNamespace  = "gh_ost"
-	rowsCopiedOpts = prometheus.CounterOpts{
-		Namespace: promNamespace,
-		Name:      "rows_copied_total",
-		Help:      "The total number of rows copied by the migration",
-	}
+const (
+	promNamespace = "gh_ost"
 )
 
 type Handler struct {
-	counters         map[string]prometheus.Counter
 	migrationContext *base.MigrationContext
 	pusher           *prompush.Pusher
 	stop             chan bool
@@ -31,18 +25,15 @@ type Handler struct {
 }
 
 func NewHandler(migrationContext *base.MigrationContext) (*Handler, error) {
-	if migrationContext.PushgatewayAddress == "" {
+	if migrationContext.pushgatewayAddress == "" {
 		return nil, fmt.Errorf("--metrics-pushgateway-address must be defined")
 	}
 
 	h := &Handler{
 		migrationContext: migrationContext,
-		counters: map[string]prometheus.Counter{
-			rowsCopiedOpts.Name: prometheus.NewCounter(rowsCopiedOpts),
-		},
 		pusher: prompush.New(
-			migrationContext.PushgatewayAddress,
-			migrationContext.PushgatewayJobName,
+			migrationContext.pushgatewayAddress,
+			migrationContext.pushgatewayJobName,
 		),
 		stop: make(chan bool, 1),
 	}
@@ -51,8 +42,30 @@ func NewHandler(migrationContext *base.MigrationContext) (*Handler, error) {
 	return h, nil
 }
 
+func (h *Handler) registerMetrics() error {
+	// rows_copied_total
+	h.counterFuncs["rows_copied_total"] = prometheus.CounterFunc(
+		prometheus.CounterOpts{
+			Namespace: promNamespace,
+			Name:      "rows_copied_total",
+			Help:      "The total number of rows copied by the migration",
+		},
+		func() float64 { float64(h.migrationContext.GetTotalRowsCopied()) },
+	)
+
+	// rows_total
+	h.gaugeFuncs["rows_total"] = prometheus.GaugeFunc(
+		prometheus.GaugeOpts{
+			Namespace: promNamespace,
+			Name:      "rows_total",
+			Help:      "The total estimated number of rows in the table",
+		},
+		func() float64 { float64(h.migrationContext.RowsEstimate) },
+	)
+}
+
 func (h *Handler) push(collector prometheus.Collector) error {
-	timeout := time.Duration(h.migrationContext.PushgatewayTimeoutSec) * time.Second
+	timeout := time.Duration(h.migrationContext.pushgatewayTimeoutSec) * time.Second
 	ctx, cancel := context.WithTimeout(context.Background(), timeout)
 	defer cancel()
 
@@ -67,21 +80,21 @@ func (h *Handler) push(collector prometheus.Collector) error {
 func (h *Handler) pushCounters() {
 	for _, counter := range h.counters {
 		if err := h.push(counter); err != nil {
-			log.Errorf("Failed to push to Prometheus Pushgateway, skipping push interval: %+v", err)
+			log.Errorf("Failed to push to Prometheus pushgateway, skipping push interval: %+v", err)
 			return
 		}
 	}
 }
 
 func (h *Handler) startMetricsPusher() {
-	if h.migrationContext.PushgatewayIntervalSec == 0 {
+	if h.migrationContext.pushgatewayIntervalSec == 0 {
 		return
 	}
 
 	h.wg.Add(1)
-	log.Info("Started Prometheus Pushgateway metrics pusher")
+	log.Info("Started Prometheus pushgateway metrics pusher")
 
-	interval := time.Duration(h.migrationContext.PushgatewayIntervalSec) * time.Second
+	interval := time.Duration(h.migrationContext.pushgatewayIntervalSec) * time.Second
 	ticker := time.NewTicker(interval)
 	defer func() {
 		ticker.Stop()
@@ -91,7 +104,7 @@ func (h *Handler) startMetricsPusher() {
 	for {
 		select {
 		case <-h.stop:
-			log.Info("Stopping Prometheus Pushgateway metrics pusher")
+			log.Info("Stopping Prometheus pushgateway metrics pusher")
 			return
 		case <-ticker.C:
 			h.pushCounters()

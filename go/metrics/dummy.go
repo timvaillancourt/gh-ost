@@ -1,21 +1,21 @@
 package metrics
 
-var (
-	dummyBinlogsAppliedKey = "binlogs-applied"
-	dummyBinlogsReadKey    = "binlogs-read"
-	dummyChunkIteration    = "chunk-iteration"
-	dummyRowsCopiedKey     = "rows-copied"
-	dummyETAMilliseconds   = "eta-milliseconds"
-	dummyTotalRowsKey      = "total-rows"
+const (
+	dummyBinlogsAppliedKey = iota
+	dummyBinlogsReadKey
+	dummyChunkIteration
+	dummyRowsCopiedKey
+	dummyETAMilliseconds
+	dummyTotalRowsKey
 )
 
 type DummyHandler struct {
-	data map[string]int64
+	data map[int]int64
 }
 
 func NewDummyHandler() *DummyHandler {
 	return &DummyHandler{
-		data: make(map[string]int64, 0),
+		data: make(map[int]int64, 0),
 	}
 }
 
