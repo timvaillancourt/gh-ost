@@ -11,13 +11,13 @@ type OptimizerHints struct {
 	MaxExecutionTime int    `hint:"MAX_EXECUTION_TIME"`
 }
 
-func (oh OptimizerHints) String() (comment string) {
-	ts := reflect.TypeOf(oh)
+func (hints OptimizerHints) String() (comment string) {
+	ts := reflect.TypeOf(hints)
 	if ts.NumField() == 0 {
 		return comment
 	}
 
-	vs := reflect.ValueOf(oh)
+	vs := reflect.ValueOf(hints)
 	hintSlice := make([]string, 0, ts.NumField())
 	for i := 0; i < ts.NumField(); i++ {
 		fieldTag := ts.Field(i).Tag

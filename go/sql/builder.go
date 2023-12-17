@@ -387,7 +387,6 @@ func buildUniqueKeyMinMaxValuesPreparedQuery(databaseName, tableName string, uni
 			uniqueKeyColumnOrder[i] = fmt.Sprintf("%s %s", uniqueKeyColumnNames[i], order)
 		}
 	}
-
 	query := fmt.Sprintf(`
 		select /* gh-ost %s.%s */ %s
 		from
@@ -396,8 +395,7 @@ func buildUniqueKeyMinMaxValuesPreparedQuery(databaseName, tableName string, uni
 		order by
 			%s
 		limit 1`,
-		databaseName, tableName,
-		strings.Join(uniqueKeyColumnNames, ", "),
+		databaseName, tableName, strings.Join(uniqueKeyColumnNames, ", "),
 		databaseName, tableName, uniqueKey.Name,
 		strings.Join(uniqueKeyColumnOrder, ", "),
 	)
