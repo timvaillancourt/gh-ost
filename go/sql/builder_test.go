@@ -733,14 +733,14 @@ func TestBuildTableCountQuery(t *testing.T) {
 	{
 		test.S(t).ExpectEquals(
 			BuildTableCountQuery(databaseName, t.Name(), optimizerHints),
-			`select  /* gh-ost */ count(*) as count_rows from `+databaseName+`.`+t.Name(),
+			`select  /* gh-ost */ count(*) as count_rows from test.`+t.Name(),
 		)
 	}
 	{
 		optimizerHints.ResourceGroup = "gh-ost"
 		test.S(t).ExpectEquals(
 			BuildTableCountQuery(databaseName, t.Name(), optimizerHints),
-			`select /*+ RESOURCE_GROUP(gh-ost) */ /* gh-ost */ count(*) as count_rows from `+databaseName+`.`+t.Name(),
+			`select /*+ RESOURCE_GROUP(gh-ost) */ /* gh-ost */ count(*) as count_rows from test.`+t.Name(),
 		)
 	}
 }
