@@ -554,7 +554,11 @@ func (this *Inspector) CountTableRows(ctx context.Context) error {
 		return err
 	}
 
-	query := fmt.Sprintf(`select /* gh-ost */ count(*) as count_rows from %s.%s`, sql.EscapeName(this.migrationContext.DatabaseName), sql.EscapeName(this.migrationContext.OriginalTableName))
+	query := sql.BuildTableCountQuery(
+		sql.EscapeName(this.migrationContext.DatabaseName),
+		sql.EscapeName(this.migrationContext.OriginalTableName),
+		this.migrationContext.OptimizerHints,
+	)
 	var rowsEstimate int64
 	if err := conn.QueryRowContext(ctx, query).Scan(&rowsEstimate); err != nil {
 		if errors.Is(err, context.Canceled) || errors.Is(err, context.DeadlineExceeded) {

@@ -209,6 +209,7 @@ type MigrationContext struct {
 	CutOverCompleteFlag                    int64
 	InCutOverCriticalSectionFlag           int64
 	PanicAbort                             chan error
+	OptimizerHints                         sql.OptimizerHints
 
 	OriginalTableColumnsOnApplier    *sql.ColumnList
 	OriginalTableColumns             *sql.ColumnList

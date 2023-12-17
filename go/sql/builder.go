@@ -387,6 +387,7 @@ func buildUniqueKeyMinMaxValuesPreparedQuery(databaseName, tableName string, uni
 			uniqueKeyColumnOrder[i] = fmt.Sprintf("%s %s", uniqueKeyColumnNames[i], order)
 		}
 	}
+
 	query := fmt.Sprintf(`
 		select /* gh-ost %s.%s */ %s
 		from
@@ -395,7 +396,8 @@ func buildUniqueKeyMinMaxValuesPreparedQuery(databaseName, tableName string, uni
 		order by
 			%s
 		limit 1`,
-		databaseName, tableName, strings.Join(uniqueKeyColumnNames, ", "),
+		databaseName, tableName,
+		strings.Join(uniqueKeyColumnNames, ", "),
 		databaseName, tableName, uniqueKey.Name,
 		strings.Join(uniqueKeyColumnOrder, ", "),
 	)
@@ -529,4 +531,12 @@ func BuildDMLUpdateQuery(databaseName, tableName string, tableColumns, sharedCol
 		equalsComparison,
 	)
 	return result, sharedArgs, uniqueKeyArgs, nil
+}
+
+func BuildTableCountQuery(databaseName, originalTableName string, optimizerHints OptimizerHints) string {
+	return fmt.Sprintf(`select %s /* gh-ost */ count(*) as count_rows from %s.%s`,
+		optimizerHints,
+		databaseName,
+		originalTableName,
+	)
 }
