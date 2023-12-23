@@ -7,7 +7,7 @@ import (
 )
 
 func TestOptimizerHintsString(t *testing.T) {
-	hints := OptimizerHints{}
+	var hints OptimizerHints
 	{
 		test.S(t).ExpectEquals(hints.String(), ``)
 	}

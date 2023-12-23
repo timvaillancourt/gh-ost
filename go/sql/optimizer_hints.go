@@ -15,10 +15,10 @@ type OptimizerHints struct {
 
 // String returns a optimizer hint string containing all
 // defined hints.
-func (hints OptimizerHints) String() (hintSQL string) {
+func (hints OptimizerHints) String() (hintsSQL string) {
 	ts := reflect.TypeOf(hints)
 	if ts.NumField() == 0 {
-		return hintSQL
+		return hintsSQL
 	}
 
 	vs := reflect.ValueOf(hints)
@@ -37,7 +37,7 @@ func (hints OptimizerHints) String() (hintSQL string) {
 	}
 
 	if len(hintSlice) > 0 {
-		hintSQL = fmt.Sprintf(`/*+ %s */`, strings.Join(hintSlice, " "))
+		hintsSQL = fmt.Sprintf(`/*+ %s */`, strings.Join(hintSlice, " "))
 	}
-	return hintSQL
+	return hintsSQL
 }
