@@ -1,11 +1,14 @@
 /*
-   Copyright 2023 GitHub Inc.
+   Copyright 2024 GitHub Inc.
          See https://github.com/github/gh-ost/blob/master/LICENSE
 */
 
 package mysql
 
-import gosql "database/sql"
+import (
+	gosql "database/sql"
+	"reflect"
+)
 
 // ServerInfo represents the online config of a MySQL server.
 type ServerInfo struct {
@@ -43,4 +46,10 @@ func GetServerInfo(db *gosql.DB) (*ServerInfo, error) {
 	_ = db.QueryRow(extraPortQuery).Scan(&info.ExtraPort)
 
 	return &info, nil
+}
+
+// Equals returns true if the provided *ServerInfo is
+// equal to *ServerInfo.
+func (si *ServerInfo) Equals(cmp *ServerInfo) bool {
+	return reflect.DeepEqual(si, cmp)
 }

@@ -71,6 +71,14 @@ func NewApplier(migrationContext *base.MigrationContext) *Applier {
 	}
 }
 
+func (this *Applier) Name() string {
+	return this.name
+}
+
+func (this *Applier) DB() *gosql.DB {
+	return this.db
+}
+
 func (this *Applier) ServerInfo() *mysql.ServerInfo {
 	return this.migrationContext.ApplierServerInfo
 }

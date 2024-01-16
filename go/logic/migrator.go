@@ -76,6 +76,7 @@ type Migrator struct {
 	server           *Server
 	throttler        *Throttler
 	hooksExecutor    *HooksExecutor
+	watchdog         *Watchdog
 	migrationContext *base.MigrationContext
 
 	firstThrottlingCollected   chan bool
@@ -359,6 +360,9 @@ func (this *Migrator) Migrate() (err error) {
 	if err := this.createFlagFiles(); err != nil {
 		return err
 	}
+
+	this.initiateWatchdog()
+
 	// In MySQL 8.0 (and possibly earlier) some DDL statements can be applied instantly.
 	// Attempt to do this if AttemptInstantDDL is set.
 	if this.migrationContext.AttemptInstantDDL {
@@ -1150,6 +1154,12 @@ func (this *Migrator) initiateApplier() error {
 	return nil
 }
 
+// initiateWatchdog initiates the watchdog as a background task.
+func (this *Migrator) initiateWatchdog() {
+	this.watchdog = NewWatchdog(this)
+	go this.watchdog.InitiateChecker()
+}
+
 // iterateChunks iterates the existing table rows, and generates a copy task of
 // a chunk of rows onto the ghost table.
 func (this *Migrator) iterateChunks() error {
@@ -1375,6 +1385,11 @@ func (this *Migrator) finalCleanup() error {
 
 func (this *Migrator) teardown() {
 	atomic.StoreInt64(&this.finishedMigrating, 1)
+
+	if this.watchdog != nil {
+		this.migrationContext.Log.Infof("Tearing down watchdog")
+		this.watchdog.Teardown()
+	}
 
 	if this.inspector != nil {
 		this.migrationContext.Log.Infof("Tearing down inspector")

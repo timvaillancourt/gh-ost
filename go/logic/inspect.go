@@ -42,6 +42,14 @@ func NewInspector(migrationContext *base.MigrationContext) *Inspector {
 	}
 }
 
+func (this *Inspector) Name() string {
+	return this.name
+}
+
+func (this *Inspector) DB() *gosql.DB {
+	return this.db
+}
+
 func (this *Inspector) ServerInfo() *mysql.ServerInfo {
 	return this.migrationContext.InspectorServerInfo
 }
