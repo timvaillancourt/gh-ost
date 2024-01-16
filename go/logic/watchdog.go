@@ -64,23 +64,26 @@ func (this *Watchdog) checkDBProvider(provider dbProvider) error {
 	providerTempDNSFailures := this.tempDNSFailures[provider.Name()]
 	serverInfo, err := this.serverInfoProvider(provider)
 	if err != nil {
-		var dnsErr *net.DNSError
-		if errors.As(err, &dnsErr) {
+		switch e := err.(type) {
+		case *net.DNSError:
 			if atomic.LoadInt64(providerTempDNSFailures) > maxTempDNSFailures {
-				log.Errorf("watchdog %s reached max temporary DNS failures (%d)", provider.Name(), maxTempDNSFailures)
+				log.Errorf("%s watchdog reached max temporary DNS failures (%d)", provider.Name(), maxTempDNSFailures)
 				return ErrWatchdogTempDNSFailuresExceeded
-			} else if dnsErr.IsTemporary {
-				log.Warningf("watchdog %s ignoring temporary DNS failure: %+v", provider.Name(), dnsErr.Err)
+			} else if e.IsTemporary {
+				log.Warningf("%s watchdog ignoring temporary DNS failure: %+v", provider.Name(), e.Err)
 				atomic.AddInt64(providerTempDNSFailures, 1)
 				return nil
 			}
+		case *net.OpError:
+			log.Warningf("%s watchdog ignoring possibly-transient network error: %+v", provider.Name(), err)
+			return nil
 		}
-		log.Errorf("watchdog %s check failed: %+v", provider.Name(), err)
+		log.Errorf("%s watchdog check failed: %+v", provider.Name(), err)
 		return ErrWatchdogCheckFailed
 	}
 	atomic.StoreInt64(providerTempDNSFailures, 0)
 	if !origServerInfo.Equals(serverInfo) {
-		log.Errorf("watchdog detected unexpected %s change from %+v to %+v", provider.Name(), origServerInfo, serverInfo)
+		log.Errorf("%s watchdog detected unexpected runtime change from %+v to %+v", provider.Name(), origServerInfo, serverInfo)
 		return ErrWatchdogUnexpectedChange
 	}
 	return nil
