@@ -60,8 +60,13 @@ func (this *Watchdog) Teardown() {
 }
 
 func (this *Watchdog) checkDBProvider(provider dbProvider) error {
-	origServerInfo := provider.ServerInfo()
+	if _, found := this.tempDNSFailures[provider.Name()]; !found {
+		var zero int64
+		this.tempDNSFailures[provider.Name()] = &zero
+	}
 	providerTempDNSFailures := this.tempDNSFailures[provider.Name()]
+
+	origServerInfo := provider.ServerInfo()
 	serverInfo, err := this.serverInfoProvider(provider)
 	if err != nil {
 		switch e := err.(type) {
@@ -83,7 +88,7 @@ func (this *Watchdog) checkDBProvider(provider dbProvider) error {
 	}
 	atomic.StoreInt64(providerTempDNSFailures, 0)
 	if !origServerInfo.Equals(serverInfo) {
-		log.Errorf("%s watchdog detected unexpected runtime change from %+v to %+v", provider.Name(), origServerInfo, serverInfo)
+		log.Errorf("%s watchdog detected unexpected runtime change from\n\t%+v\nto\n\t%+v", provider.Name(), origServerInfo, serverInfo)
 		return ErrWatchdogUnexpectedChange
 	}
 	return nil
