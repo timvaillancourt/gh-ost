@@ -7,21 +7,22 @@ package mysql
 
 import (
 	gosql "database/sql"
+	"encoding/json"
 	"reflect"
 )
 
 // ServerInfo represents the online config of a MySQL server.
 type ServerInfo struct {
-	Version         string
-	VersionComment  string
-	Hostname        string
-	Port            gosql.NullInt64
-	BinlogFormat    string
-	BinlogRowImage  string
-	LogBin          bool
-	LogSlaveUpdates bool
-	SQLMode         string
-	TimeZone        string
+	Version         string          `json:",omitempty"`
+	VersionComment  string          `json:",omitempty"`
+	Hostname        string          `json:",omitempty"`
+	Port            gosql.NullInt64 `json:",omitempty"`
+	BinlogFormat    string          `json:",omitempty"`
+	BinlogRowImage  string          `json:",omitempty"`
+	LogBin          bool            `json:",omitempty"`
+	LogSlaveUpdates bool            `json:",omitempty"`
+	SQLMode         string          `json:",omitempty"`
+	TimeZone        string          `json:",omitempty"`
 
 	// @@global.extra_port is Percona/MariaDB-only
 	ExtraPort gosql.NullInt64
@@ -48,8 +49,17 @@ func GetServerInfo(db *gosql.DB) (*ServerInfo, error) {
 	return &info, nil
 }
 
+// String returns a JSON representation of *ServerInfo.
+func (info *ServerInfo) String() string {
+	data, err := json.Marshal(info)
+	if err != nil {
+		return err.Error()
+	}
+	return string(data)
+}
+
 // Equals returns true if the provided *ServerInfo is
 // equal to *ServerInfo.
-func (si *ServerInfo) Equals(cmp *ServerInfo) bool {
-	return reflect.DeepEqual(si, cmp)
+func (info *ServerInfo) Equals(cmp *ServerInfo) bool {
+	return reflect.DeepEqual(info, cmp)
 }

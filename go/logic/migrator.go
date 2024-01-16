@@ -361,7 +361,10 @@ func (this *Migrator) Migrate() (err error) {
 		return err
 	}
 
-	this.initiateWatchdog()
+	// watchdog
+	if this.migrationContext.EnableWatchdog {
+		this.initiateWatchdog()
+	}
 
 	// In MySQL 8.0 (and possibly earlier) some DDL statements can be applied instantly.
 	// Attempt to do this if AttemptInstantDDL is set.

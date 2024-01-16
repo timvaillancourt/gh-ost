@@ -1,3 +1,8 @@
+/*
+   Copyright 2024 GitHub Inc.
+         See https://github.com/github/gh-ost/blob/master/LICENSE
+*/
+
 package logic
 
 import (
@@ -18,7 +23,7 @@ var (
 	ErrWatchdogTempDNSFailuresExceeded = errors.New("watchdog reached max temporary DNS failures")
 	ErrWatchdogUnexpectedChange        = errors.New("watchdog detected unexpected change")
 	//
-	maxTempDNSFailures int64 = 10
+	maxTempDNSFailures int64 = 25
 	watchdogInterval         = time.Second * 10
 )
 
@@ -26,6 +31,7 @@ type dbProvider interface {
 	Name() string
 	DB() *gosql.DB
 	ServerInfo() *mysql.ServerInfo
+	Teardown()
 }
 
 func getDBProviderServerInfo(provider dbProvider) (*mysql.ServerInfo, error) {
@@ -37,7 +43,7 @@ type Watchdog struct {
 	migrationContext   *base.MigrationContext
 	serverInfoProvider func(dbProvider) (*mysql.ServerInfo, error)
 	done               chan bool
-	tempDNSFailures    map[string]*int64
+	tempDNSFailures    map[string]int64
 }
 
 func NewWatchdog(migrator *Migrator) *Watchdog {
@@ -48,7 +54,7 @@ func NewWatchdog(migrator *Migrator) *Watchdog {
 		},
 		migrationContext:   migrator.migrationContext,
 		serverInfoProvider: getDBProviderServerInfo,
-		tempDNSFailures:    make(map[string]*int64),
+		tempDNSFailures:    make(map[string]int64),
 	}
 }
 
@@ -60,35 +66,41 @@ func (this *Watchdog) Teardown() {
 }
 
 func (this *Watchdog) checkDBProvider(provider dbProvider) error {
-	if _, found := this.tempDNSFailures[provider.Name()]; !found {
-		var zero int64
-		this.tempDNSFailures[provider.Name()] = &zero
-	}
 	providerTempDNSFailures := this.tempDNSFailures[provider.Name()]
-
 	origServerInfo := provider.ServerInfo()
-	serverInfo, err := this.serverInfoProvider(provider)
+	runtimeServerInfo, err := this.serverInfoProvider(provider)
 	if err != nil {
 		switch e := err.(type) {
 		case *net.DNSError:
-			if atomic.LoadInt64(providerTempDNSFailures) > maxTempDNSFailures {
+			// ignore transient *net.DNSError, unless a limit is reached consequtively
+			// fail on "no such host" errors
+			if atomic.LoadInt64(&providerTempDNSFailures) > maxTempDNSFailures {
 				log.Errorf("%s watchdog reached max temporary DNS failures (%d)", provider.Name(), maxTempDNSFailures)
 				return ErrWatchdogTempDNSFailuresExceeded
 			} else if e.IsTemporary {
+				// return nil with the assumption another check will occur
 				log.Warningf("%s watchdog ignoring temporary DNS failure: %+v", provider.Name(), e.Err)
-				atomic.AddInt64(providerTempDNSFailures, 1)
+				atomic.AddInt64(&providerTempDNSFailures, 1)
 				return nil
+			} else if e.IsNotFound {
+				log.Errorf("%s watchdog got non-temporary DNS error %q for %q, assuming host is gone", provider.Name(), e.Err, e.Name)
+				return ErrWatchdogUnexpectedChange
 			}
 		case *net.OpError:
+			// assume *net.OpError errors are handled by something else, don't panic
 			log.Warningf("%s watchdog ignoring possibly-transient network error: %+v", provider.Name(), err)
 			return nil
+		default:
+			log.Errorf("%s watchdog check failed: %+v", provider.Name(), err)
+			return ErrWatchdogCheckFailed
 		}
-		log.Errorf("%s watchdog check failed: %+v", provider.Name(), err)
-		return ErrWatchdogCheckFailed
+	} else {
+		atomic.StoreInt64(&providerTempDNSFailures, 0)
 	}
-	atomic.StoreInt64(providerTempDNSFailures, 0)
-	if !origServerInfo.Equals(serverInfo) {
-		log.Errorf("%s watchdog detected unexpected runtime change from\n\t%+v\nto\n\t%+v", provider.Name(), origServerInfo, serverInfo)
+
+	// check runtime config matches initial state
+	if !origServerInfo.Equals(runtimeServerInfo) {
+		log.Errorf("%s watchdog found unexpected runtime change from:\n    %s\nto\n    %s", provider.Name(), origServerInfo, runtimeServerInfo)
 		return ErrWatchdogUnexpectedChange
 	}
 	return nil

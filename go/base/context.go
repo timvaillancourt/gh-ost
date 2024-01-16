@@ -161,6 +161,8 @@ type MigrationContext struct {
 	CutOverType                  CutOver
 	ReplicaServerId              uint
 
+	EnableWatchdog bool
+
 	Hostname                               string
 	AssumeMasterHostname                   string
 	TableEngine                            string
