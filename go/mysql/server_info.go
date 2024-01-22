@@ -11,21 +11,35 @@ import (
 	"reflect"
 )
 
+// ServerPort wraps gosql.NullInt64.
+type ServerPort gosql.NullInt64
+
+// NewServerPort returns a new ServerPort.
+func NewServerPort(port int64) ServerPort {
+	return ServerPort{Int64: port, Valid: port > 0 && port <= 65535}
+}
+
+// MarshalJSON causes the underlying gosql.NullInt64 struct
+// to marshal more-cleanly as an int64 vs a struct.
+func (sp *ServerPort) MarshalJSON() ([]byte, error) {
+	return json.Marshal(sp.Int64)
+}
+
 // ServerInfo represents the online config of a MySQL server.
 type ServerInfo struct {
-	Version         string          `json:",omitempty"`
-	VersionComment  string          `json:",omitempty"`
-	Hostname        string          `json:",omitempty"`
-	Port            gosql.NullInt64 `json:",omitempty"`
-	BinlogFormat    string          `json:",omitempty"`
-	BinlogRowImage  string          `json:",omitempty"`
-	LogBin          bool            `json:",omitempty"`
-	LogSlaveUpdates bool            `json:",omitempty"`
-	SQLMode         string          `json:",omitempty"`
-	TimeZone        string          `json:",omitempty"`
+	Version         string     `json:",omitempty"`
+	VersionComment  string     `json:",omitempty"`
+	Hostname        string     `json:",omitempty"`
+	Port            ServerPort `json:",omitempty"`
+	BinlogFormat    string     `json:",omitempty"`
+	BinlogRowImage  string     `json:",omitempty"`
+	LogBin          bool       `json:",omitempty"`
+	LogSlaveUpdates bool       `json:",omitempty"`
+	SQLMode         string     `json:",omitempty"`
+	TimeZone        string     `json:",omitempty"`
 
 	// @@global.extra_port is Percona/MariaDB-only
-	ExtraPort gosql.NullInt64
+	ExtraPort ServerPort
 }
 
 // GetServerInfo returns a ServerInfo struct representing

@@ -6,7 +6,6 @@
 package base
 
 import (
-	gosql "database/sql"
 	"testing"
 
 	"github.com/github/gh-ost/go/mysql"
@@ -16,10 +15,6 @@ import (
 
 func init() {
 	log.SetLevel(log.ERROR)
-}
-
-func newMysqlPort(port int64) gosql.NullInt64 {
-	return gosql.NullInt64{Int64: port, Valid: port > 0}
 }
 
 func TestStringContainsAll(t *testing.T) {
@@ -46,8 +41,8 @@ func TestValidateConnection(t *testing.T) {
 	{
 		migrationContext := &MigrationContext{Log: NewDefaultLogger()}
 		serverInfo := &mysql.ServerInfo{
-			Port:      newMysqlPort(mysql.DefaultInstancePort),
-			ExtraPort: newMysqlPort(mysql.DefaultInstancePort + 1),
+			Port:      mysql.NewServerPort(mysql.DefaultInstancePort),
+			ExtraPort: mysql.NewServerPort(mysql.DefaultInstancePort + 1),
 		}
 		test.S(t).ExpectNil(ValidateConnection(serverInfo, connectionConfig, migrationContext, "test"))
 	}
@@ -82,7 +77,7 @@ func TestValidateConnection(t *testing.T) {
 	{
 		migrationContext := &MigrationContext{Log: NewDefaultLogger()}
 		serverInfo := &mysql.ServerInfo{
-			ExtraPort: newMysqlPort(mysql.DefaultInstancePort),
+			ExtraPort: mysql.NewServerPort(mysql.DefaultInstancePort),
 		}
 		test.S(t).ExpectNil(ValidateConnection(serverInfo, connectionConfig, migrationContext, "test"))
 	}
@@ -90,8 +85,8 @@ func TestValidateConnection(t *testing.T) {
 	{
 		migrationContext := &MigrationContext{Log: NewDefaultLogger()}
 		serverInfo := &mysql.ServerInfo{
-			Port:      newMysqlPort(12345),
-			ExtraPort: newMysqlPort(mysql.DefaultInstancePort),
+			Port:      mysql.NewServerPort(12345),
+			ExtraPort: mysql.NewServerPort(mysql.DefaultInstancePort),
 		}
 		test.S(t).ExpectNil(ValidateConnection(serverInfo, connectionConfig, migrationContext, "test"))
 	}
@@ -99,7 +94,7 @@ func TestValidateConnection(t *testing.T) {
 	{
 		migrationContext := &MigrationContext{Log: NewDefaultLogger()}
 		serverInfo := &mysql.ServerInfo{
-			Port: newMysqlPort(9999),
+			Port: mysql.NewServerPort(9999),
 		}
 		test.S(t).ExpectNotNil(ValidateConnection(serverInfo, connectionConfig, migrationContext, "test"))
 	}

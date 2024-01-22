@@ -24,7 +24,7 @@ var (
 	ErrWatchdogUnexpectedChange        = errors.New("watchdog detected unexpected change")
 	//
 	maxTempDNSFailures int64 = 25
-	watchdogInterval         = time.Second * 10
+	watchdogInterval         = time.Second * 15
 )
 
 type dbProvider interface {
@@ -83,7 +83,7 @@ func (this *Watchdog) checkDBProvider(provider dbProvider) error {
 				atomic.AddInt64(&providerTempDNSFailures, 1)
 				return nil
 			} else if e.IsNotFound {
-				log.Errorf("%s watchdog got non-temporary DNS error %q for %q, assuming host is gone", provider.Name(), e.Err, e.Name)
+				log.Errorf("%s watchdog got DNS error %q for %q, assuming host is gone", provider.Name(), e.Err, e.Name)
 				return ErrWatchdogUnexpectedChange
 			}
 		case *net.OpError:
@@ -94,8 +94,6 @@ func (this *Watchdog) checkDBProvider(provider dbProvider) error {
 			log.Errorf("%s watchdog check failed: %+v", provider.Name(), err)
 			return ErrWatchdogCheckFailed
 		}
-	} else {
-		atomic.StoreInt64(&providerTempDNSFailures, 0)
 	}
 
 	// check runtime config matches initial state
@@ -103,6 +101,7 @@ func (this *Watchdog) checkDBProvider(provider dbProvider) error {
 		log.Errorf("%s watchdog found unexpected runtime change from:\n    %s\nto\n    %s", provider.Name(), origServerInfo, runtimeServerInfo)
 		return ErrWatchdogUnexpectedChange
 	}
+	atomic.StoreInt64(&providerTempDNSFailures, 0)
 	return nil
 }
 

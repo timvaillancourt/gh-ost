@@ -14,6 +14,7 @@ func TestWatchdogCheckDBProvider(t *testing.T) {
 	migrationContext := base.NewMigrationContext()
 	migrationContext.InspectorServerInfo = &mysql.ServerInfo{
 		Hostname:        "inspector",
+		Port:            mysql.NewServerPort(3306),
 		Version:         "8.9.10",
 		VersionComment:  "test",
 		LogBin:          true,
@@ -21,6 +22,7 @@ func TestWatchdogCheckDBProvider(t *testing.T) {
 	}
 	migrationContext.ApplierServerInfo = &mysql.ServerInfo{
 		Hostname:        "applier",
+		Port:            mysql.NewServerPort(3306),
 		Version:         "8.9.10",
 		VersionComment:  "test",
 		LogBin:          true,
@@ -83,6 +85,7 @@ func TestWatchdogCheckDBProvider(t *testing.T) {
 			watchdog.serverInfoProvider = func(provider dbProvider) (*mysql.ServerInfo, error) {
 				return &mysql.ServerInfo{
 					Hostname:        provider.Name(),
+					Port:            mysql.NewServerPort(3306),
 					Version:         testCase.returnServerInfoVersion,
 					VersionComment:  "test",
 					LogBin:          true,
